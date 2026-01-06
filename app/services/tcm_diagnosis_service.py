@@ -285,8 +285,17 @@ class TCMDiagnosisService:
         height: Optional[float] = None,
         weight: Optional[float] = None,
         coze_conversation_log: Optional[str] = None,
+        sanzhen_diagnosis: Optional[str] = None,
     ) -> AsyncGenerator[str, None]:
-        """流式处理完整的诊断流程"""
+        """流式处理完整的诊断流程
+        
+        Args:
+            transcript: 医患对话转录文本
+            height: 患者身高(cm)
+            weight: 患者体重(kg)
+            coze_conversation_log: AI预问诊对话信息
+            sanzhen_diagnosis: 预问诊结论（来自sanzhen_result的diagnosis_result），包含四诊信息和初步建议
+        """
         logger.info("开始流式诊断流程")
         start_time = time.time()
 
@@ -295,6 +304,9 @@ class TCMDiagnosisService:
         diagnosis_explanation = ""
         prescription = ""
         exercise_prescription = ""
+        
+        # 预问诊结论，如果未提供则使用默认值
+        pre_diagnosis = sanzhen_diagnosis or "未提供预问诊结论"
 
         def create_sse_event(event_type: str, data: Dict[str, Any]) -> str:
             return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -303,7 +315,11 @@ class TCMDiagnosisService:
             # 阶段1: 生成病历
             yield create_sse_event("stage_start", {"stage": DiagnosisStage.MEDICAL_RECORD, "stage_name": "生成病历", "step": "1/4"})
 
-            prompt = MEDICAL_RECORD_PROMPT_TEMPLATE.format(transcript=transcript, log_string=coze_conversation_log or "")
+            prompt = MEDICAL_RECORD_PROMPT_TEMPLATE.format(
+                transcript=transcript,
+                log_string=coze_conversation_log or "",
+                diagnosis=pre_diagnosis
+            )
             full_response = ""
             async for chunk in self._async_stream_llm(prompt, temperature=0.6):
                 full_response += chunk
@@ -319,7 +335,10 @@ class TCMDiagnosisService:
             # 阶段2: 证型判断
             yield create_sse_event("stage_start", {"stage": DiagnosisStage.DIAGNOSIS, "stage_name": "证型判断", "step": "2/4"})
 
-            prompt = TYPE_INFER_PROMPT_TEMPLATE.format(medical_record=medical_record)
+            prompt = TYPE_INFER_PROMPT_TEMPLATE.format(
+                medical_record=medical_record,
+                diagnosis=pre_diagnosis
+            )
             full_response = ""
             async for chunk in self._async_stream_llm(prompt, temperature=0.3):
                 full_response += chunk
@@ -336,7 +355,11 @@ class TCMDiagnosisService:
             # 阶段3: 处方生成
             yield create_sse_event("stage_start", {"stage": DiagnosisStage.PRESCRIPTION, "stage_name": "处方生成", "step": "3/4"})
 
-            prompt = PRESCRIPTION_PROMPT_TEMPLATE.format(medical_record=medical_record, diagnosis_result=diagnosis)
+            prompt = PRESCRIPTION_PROMPT_TEMPLATE.format(
+                medical_record=medical_record,
+                diagnosis_result=diagnosis,
+                diagnosis=pre_diagnosis
+            )
             full_response = ""
             async for chunk in self._async_stream_llm(prompt, temperature=0.3):
                 full_response += chunk
@@ -355,6 +378,7 @@ class TCMDiagnosisService:
             prompt = EXERCISE_PRESCRIPTION_PROMPT_TEMPLATE.format(
                 medical_record=medical_record,
                 diagnosis_result=diagnosis,
+                diagnosis=pre_diagnosis,
                 height=height or "未提供",
                 weight=weight or "未提供",
                 bmi=bmi,

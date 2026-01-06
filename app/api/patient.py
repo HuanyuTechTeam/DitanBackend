@@ -353,11 +353,12 @@ async def create_ai_diagnosis_stream(
             ctx.log_error(f"未找到就诊记录 ID: {record_id}")
             raise NotFoundException(f"未找到就诊记录 ID: {record_id}")
 
-        height, weight, coze_conversation_log = None, None, None
+        height, weight, coze_conversation_log, sanzhen_diagnosis = None, None, None, None
         if medical_record.pre_diagnosis:
             height = medical_record.pre_diagnosis.height
             weight = medical_record.pre_diagnosis.weight
             coze_conversation_log = medical_record.pre_diagnosis.coze_conversation_log
+            sanzhen_diagnosis = medical_record.pre_diagnosis.diagnosis_result
 
         diagnosis_result_holder = {"data": None}
 
@@ -369,6 +370,7 @@ async def create_ai_diagnosis_stream(
                     height=height,
                     weight=weight,
                     coze_conversation_log=coze_conversation_log,
+                    sanzhen_diagnosis=sanzhen_diagnosis,
                 ):
                     yield event_data
                     if event_data.startswith("event: complete"):
