@@ -344,7 +344,10 @@ async def create_ai_diagnosis_stream(
 
         result = await ctx.db.execute(
             select(PatientMedicalRecord)
-            .options(selectinload(PatientMedicalRecord.pre_diagnosis))
+            .options(
+                selectinload(PatientMedicalRecord.pre_diagnosis)
+                .selectinload(PreDiagnosisRecord.sanzhen_result)
+            )
             .where(PatientMedicalRecord.record_id == record_id)
         )
         medical_record = result.scalar_one_or_none()
@@ -358,7 +361,8 @@ async def create_ai_diagnosis_stream(
             height = medical_record.pre_diagnosis.height
             weight = medical_record.pre_diagnosis.weight
             coze_conversation_log = medical_record.pre_diagnosis.coze_conversation_log
-            sanzhen_diagnosis = medical_record.pre_diagnosis.diagnosis_result
+            if medical_record.pre_diagnosis.sanzhen_result:
+                sanzhen_diagnosis = medical_record.pre_diagnosis.sanzhen_result.diagnosis_result
 
         diagnosis_result_holder = {"data": None}
 
