@@ -11,7 +11,15 @@ from app.core.exceptions import (
     DatabaseException,
     ServiceException,
 )
-from app.core.logging import LoggerSetup, get_logger, log_request, log_response, log_error
+from app.core.logging import (
+    LoggerSetup,
+    get_logger,
+    get_structured_logger,
+    StructuredLogger,
+    log_request,
+    log_response,
+    log_error,
+)
 from app.core.auth import (
     hash_password,
     verify_password,
@@ -38,6 +46,8 @@ __all__ = [
     "ServiceException",
     "LoggerSetup",
     "get_logger",
+    "get_structured_logger",
+    "StructuredLogger",
     "log_request",
     "log_response",
     "log_error",

@@ -19,7 +19,7 @@ from app.schemas.chat import (
     ChatRequest,
     ChatStreamRequest,
 )
-from app.services.chat_service import ChatService
+from app.services import ChatService
 
 router = APIRouter()
 settings = get_settings()
@@ -59,7 +59,6 @@ async def create_conversation(
             message="会话创建成功",
             data=ConversationResponse.model_validate(conversation).model_dump(),
         )
-
     except Exception as e:
         ctx.log_error("创建会话失败", e)
         raise ValidationException("创建会话失败", str(e))
@@ -107,7 +106,6 @@ async def get_conversation(
                 ],
             ).model_dump(),
         )
-
     except NotFoundException:
         raise
     except Exception as e:
@@ -137,7 +135,6 @@ async def chat(
             message="发送成功",
             data={"response": response},
         )
-
     except ValueError as e:
         raise NotFoundException(str(e))
     except Exception as e:
@@ -207,10 +204,8 @@ async def close_conversation(
             message="会话已关闭",
             data={"session_id": session_id},
         )
-
     except NotFoundException:
         raise
     except Exception as e:
         ctx.log_error("关闭会话失败", e)
         raise ValidationException("关闭会话失败", str(e))
-
