@@ -45,6 +45,7 @@ class DiagnosisService:
         self,
         record_id: int,
         diagnosis_data: AIDiagnosisCreate,
+        tcm_service: Optional[TCMDiagnosisService] = None,
     ) -> AIDiagnosisResponse:
         """
         生成 AI 诊断
@@ -68,18 +69,22 @@ class DiagnosisService:
 
         # 提取预诊信息
         height, weight, coze_conversation_log = None, None, None
+        sanzhen_diagnosis = None
         if medical_record.pre_diagnosis:
             height = medical_record.pre_diagnosis.height
             weight = medical_record.pre_diagnosis.weight
             coze_conversation_log = medical_record.pre_diagnosis.coze_conversation_log
+            if medical_record.pre_diagnosis.sanzhen_result:
+                sanzhen_diagnosis = medical_record.pre_diagnosis.sanzhen_result.diagnosis_result
 
         # 调用 TCM 服务
-        tcm_service = get_tcm_service()
+        tcm_service = tcm_service or get_tcm_service()
         diagnosis_result = tcm_service.process_complete_diagnosis(
             transcript=diagnosis_data.asr_text,
             height=height,
             weight=weight,
             coze_conversation_log=coze_conversation_log,
+            sanzhen_diagnosis=sanzhen_diagnosis,
         )
 
         if diagnosis_result["overall_status"] == "failed":

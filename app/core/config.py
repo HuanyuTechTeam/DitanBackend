@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # 应用配置
     APP_NAME: str = "DitanBackend"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "3.0.0"
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
     APP_DEBUG: bool = False

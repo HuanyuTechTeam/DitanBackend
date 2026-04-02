@@ -38,7 +38,7 @@ DitanBackend Docker 管理脚本
     $0 [命令] [选项]
 
 命令:
-    build       构建 Docker 镜像
+    build       构建本地开发镜像
     up          启动服务（构建并运行）
     down        停止服务
     restart     重启服务
@@ -105,9 +105,9 @@ init_env() {
 
 # 构建镜像
 build_image() {
-    print_info "开始构建 Docker 镜像..."
-    docker-compose build "$@"
-    print_success "镜像构建完成"
+    print_info "开始构建本地开发镜像..."
+    docker-compose -f docker-compose.yml -f docker-compose.dev.yml build app "$@"
+    print_success "本地开发镜像构建完成"
 }
 
 # 启动服务

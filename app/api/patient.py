@@ -111,7 +111,11 @@ async def create_ai_diagnosis(
         ctx.log_info(f"生成AI诊断: record_id={record_id}")
 
         service = DiagnosisService(ctx.db)
-        result = await service.create_ai_diagnosis(record_id, diagnosis_data)
+        result = await service.create_ai_diagnosis(
+            record_id,
+            diagnosis_data,
+            tcm_service=get_tcm_service(),
+        )
 
         ctx.log_info(f"AI诊断完成: diagnosis_id={result.diagnosis_id}")
         return APIResponse(

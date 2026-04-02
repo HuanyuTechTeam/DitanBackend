@@ -59,11 +59,20 @@ class TCMDiagnosisService:
         duration = round(time.time() - start_time, 2)
         return response, duration
 
-    def generate_medical_record(self, transcript: str, coze_conversation_log: str) -> Dict[str, Any]:
+    def generate_medical_record(
+        self,
+        transcript: str,
+        coze_conversation_log: str,
+        diagnosis: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """从对话转录文本生成病历"""
         try:
             logger.info("开始生成病历")
-            prompt = MEDICAL_RECORD_PROMPT_TEMPLATE.format(transcript=transcript, log_string=coze_conversation_log)
+            prompt = MEDICAL_RECORD_PROMPT_TEMPLATE.format(
+                transcript=transcript,
+                log_string=coze_conversation_log,
+                diagnosis=diagnosis or "未提供预问诊结论",
+            )
             response, duration = self._call_llm(prompt, temperature=0.6)
             medical_record = self._extract_answer(response)
 
@@ -86,11 +95,18 @@ class TCMDiagnosisService:
                 "timestamp": time.time(),
             }
 
-    def judge_symptom_type(self, medical_record: str) -> Dict[str, Any]:
+    def judge_symptom_type(
+        self,
+        medical_record: str,
+        diagnosis: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """证型判断"""
         try:
             logger.info("开始证型判断")
-            prompt = TYPE_INFER_PROMPT_TEMPLATE.format(medical_record=medical_record)
+            prompt = TYPE_INFER_PROMPT_TEMPLATE.format(
+                medical_record=medical_record,
+                diagnosis=diagnosis or "未提供预问诊结论",
+            )
             response, duration = self._call_llm(prompt, temperature=0.3)
             diagnosis = self._extract_answer(response)
             explanation = self._extract_think(response)
@@ -115,11 +131,20 @@ class TCMDiagnosisService:
                 "timestamp": time.time(),
             }
 
-    def generate_prescription(self, medical_record: str, diagnosis_result: str) -> Dict[str, Any]:
+    def generate_prescription(
+        self,
+        medical_record: str,
+        diagnosis_result: str,
+        diagnosis: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """生成处方"""
         try:
             logger.info("开始生成处方")
-            prompt = PRESCRIPTION_PROMPT_TEMPLATE.format(medical_record=medical_record, diagnosis_result=diagnosis_result)
+            prompt = PRESCRIPTION_PROMPT_TEMPLATE.format(
+                medical_record=medical_record,
+                diagnosis_result=diagnosis_result,
+                diagnosis=diagnosis or "未提供预问诊结论",
+            )
             response, duration = self._call_llm(prompt, temperature=0.3)
             prescription = self._extract_answer(response)
 
@@ -150,6 +175,7 @@ class TCMDiagnosisService:
         diagnosis_result: str,
         height: Optional[float] = None,
         weight: Optional[float] = None,
+        diagnosis: Optional[str] = None,
     ) -> Dict[str, Any]:
         """生成运动处方"""
         try:
@@ -163,6 +189,7 @@ class TCMDiagnosisService:
             prompt = EXERCISE_PRESCRIPTION_PROMPT_TEMPLATE.format(
                 medical_record=medical_record,
                 diagnosis_result=diagnosis_result,
+                diagnosis=diagnosis or "未提供预问诊结论",
                 height=height or "未提供",
                 weight=weight or "未提供",
                 bmi=bmi,
@@ -197,14 +224,20 @@ class TCMDiagnosisService:
         height: Optional[float] = None,
         weight: Optional[float] = None,
         coze_conversation_log: Optional[str] = None,
+        sanzhen_diagnosis: Optional[str] = None,
     ) -> Dict[str, Any]:
         """处理完整的诊断流程"""
         logger.info("开始完整诊断流程")
         start_time = time.time()
+        pre_diagnosis = sanzhen_diagnosis or "未提供预问诊结论"
 
         # 1. 生成病历
         logger.info("[1/4] 生成病历")
-        medical_result = self.generate_medical_record(transcript, coze_conversation_log or "")
+        medical_result = self.generate_medical_record(
+            transcript,
+            coze_conversation_log or "",
+            diagnosis=pre_diagnosis,
+        )
         if medical_result["status"] != "success":
             logger.error("病历生成失败")
             return self._build_failed_result(transcript, medical_result, "medical_record_generation_failed")
@@ -213,7 +246,10 @@ class TCMDiagnosisService:
 
         # 2. 证型判断
         logger.info("[2/4] 证型判断")
-        diagnosis_result = self.judge_symptom_type(medical_record)
+        diagnosis_result = self.judge_symptom_type(
+            medical_record,
+            diagnosis=pre_diagnosis,
+        )
         if diagnosis_result["status"] != "success":
             logger.error("证型判断失败")
             return {
@@ -230,11 +266,21 @@ class TCMDiagnosisService:
 
         # 3. 处方生成
         logger.info("[3/4] 处方生成")
-        prescription_result = self.generate_prescription(medical_record, diagnosis)
+        prescription_result = self.generate_prescription(
+            medical_record,
+            diagnosis,
+            diagnosis=pre_diagnosis,
+        )
 
         # 4. 运动处方生成
         logger.info("[4/4] 运动处方生成")
-        exercise_result = self.generate_exercise_prescription(medical_record, diagnosis, height, weight)
+        exercise_result = self.generate_exercise_prescription(
+            medical_record,
+            diagnosis,
+            height,
+            weight,
+            diagnosis=pre_diagnosis,
+        )
 
         total_duration = round(time.time() - start_time, 2)
         overall_status = self._determine_overall_status(prescription_result, exercise_result)

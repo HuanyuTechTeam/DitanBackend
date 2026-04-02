@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="病人数据上传后端服务",
+    description="中医智能诊疗系统后端服务，提供医生认证、患者与就诊管理、AI 诊断和聊天会话能力。",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",

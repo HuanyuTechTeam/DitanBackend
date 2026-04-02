@@ -45,7 +45,7 @@ DitanBackend Docker 管理脚本 (Windows 版本)
     .\docker_build.ps1 [命令] [选项]
 
 命令:
-    build       构建 Docker 镜像
+    build       构建本地开发镜像
     up          启动服务（构建并运行）
     down        停止服务
     restart     重启服务
@@ -113,10 +113,10 @@ function Initialize-Environment {
 
 # 构建镜像
 function Build-Image {
-    Write-Info "开始构建 Docker 镜像..."
-    docker-compose build
+    Write-Info "开始构建本地开发镜像..."
+    docker-compose -f docker-compose.yml -f docker-compose.dev.yml build app
     if ($LASTEXITCODE -eq 0) {
-        Write-Success "镜像构建完成"
+        Write-Success "本地开发镜像构建完成"
     }
     else {
         Write-Error-Msg "镜像构建失败"
