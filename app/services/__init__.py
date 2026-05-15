@@ -1,4 +1,5 @@
 """服务层模块"""
+
 from app.services.openai_client import OpenAIChatCompletion
 from app.services.tcm_diagnosis_service import TCMDiagnosisService
 from app.services.patient_service import PatientService

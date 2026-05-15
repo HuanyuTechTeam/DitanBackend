@@ -1,5 +1,6 @@
 """就诊记录业务逻辑层"""
-from typing import Optional, Any
+
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -24,6 +25,7 @@ from app.schemas.patient import (
     AIDiagnosisResponse,
     DoctorDiagnosisResponse,
 )
+from app.schemas.common import DiagnosisType as SchemaDiagnosisType
 
 
 class MedicalRecordService:
@@ -145,24 +147,30 @@ class MedicalRecordService:
 
         # 构建诊断列表
         diagnoses_list = []
-        for d in ai_diagnoses:
-            diagnoses_list.append(AIDiagnosisResponse.model_validate(d).model_dump())
-        for d in doctor_diagnoses:
+        for ai_diagnosis in ai_diagnoses:
+            diagnoses_list.append(
+                AIDiagnosisResponse.model_validate(ai_diagnosis).model_dump()
+            )
+        for doctor_diagnosis in doctor_diagnoses:
             diagnoses_list.append(
                 DoctorDiagnosisResponse(
-                    diagnosis_id=d.diagnosis_id,
-                    record_id=d.record_id,
-                    type=d.type,
-                    doctor_id=d.doctor_id,
-                    doctor_name=d.doctor.name if d.doctor else None,
-                    formatted_medical_record=d.formatted_medical_record,
-                    type_inference=d.type_inference,
-                    treatment=d.treatment,
-                    prescription=d.prescription,
-                    exercise_prescription=d.exercise_prescription,
-                    comments=d.comments,
-                    created_at=d.created_at,
-                    updated_at=d.updated_at,
+                    diagnosis_id=doctor_diagnosis.diagnosis_id,
+                    record_id=doctor_diagnosis.record_id,
+                    type=SchemaDiagnosisType(doctor_diagnosis.type.value),
+                    doctor_id=doctor_diagnosis.doctor_id,
+                    doctor_name=(
+                        doctor_diagnosis.doctor.name
+                        if doctor_diagnosis.doctor
+                        else None
+                    ),
+                    formatted_medical_record=doctor_diagnosis.formatted_medical_record,
+                    type_inference=doctor_diagnosis.type_inference,
+                    treatment=doctor_diagnosis.treatment,
+                    prescription=doctor_diagnosis.prescription,
+                    exercise_prescription=doctor_diagnosis.exercise_prescription,
+                    comments=doctor_diagnosis.comments,
+                    created_at=doctor_diagnosis.created_at,
+                    updated_at=doctor_diagnosis.updated_at,
                 ).model_dump()
             )
 
@@ -175,9 +183,13 @@ class MedicalRecordService:
             "status": medical_record.status,
             "created_at": medical_record.created_at.isoformat(),
             "updated_at": medical_record.updated_at.isoformat(),
-            "patient": PatientResponse.model_validate(medical_record.patient).model_dump(),
+            "patient": PatientResponse.model_validate(
+                medical_record.patient
+            ).model_dump(),
             "pre_diagnosis": (
-                PreDiagnosisResponse.model_validate(medical_record.pre_diagnosis).model_dump()
+                PreDiagnosisResponse.model_validate(
+                    medical_record.pre_diagnosis
+                ).model_dump()
                 if medical_record.pre_diagnosis
                 else None
             ),

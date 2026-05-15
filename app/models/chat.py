@@ -1,4 +1,5 @@
 """聊天会话与消息数据库模型"""
+
 from datetime import datetime
 from typing import Optional, List
 from enum import Enum as PyEnum
@@ -11,6 +12,7 @@ from app.core.database import Base
 
 class MessageRole(str, PyEnum):
     """消息角色"""
+
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
@@ -21,9 +23,13 @@ class ChatConversation(Base):
 
     __tablename__ = "chat_conversations"
 
-    conversation_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
     # 会话唯一标识，用于客户端标识会话
-    session_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    session_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True
+    )
     # 可选关联患者
     patient_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("patients.patient_id"), nullable=True, index=True
@@ -35,7 +41,9 @@ class ChatConversation(Base):
     # 是否活跃
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # 时间戳
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
@@ -45,7 +53,7 @@ class ChatConversation(Base):
         "ChatMessage",
         back_populates="conversation",
         cascade="all, delete-orphan",
-        order_by="ChatMessage.created_at"
+        order_by="ChatMessage.created_at",
     )
 
     def __repr__(self) -> str:
@@ -57,9 +65,14 @@ class ChatMessage(Base):
 
     __tablename__ = "chat_messages"
 
-    message_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
     conversation_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("chat_conversations.conversation_id"), nullable=False, index=True
+        Integer,
+        ForeignKey("chat_conversations.conversation_id"),
+        nullable=False,
+        index=True,
     )
     # 消息角色
     role: Mapped[MessageRole] = mapped_column(Enum(MessageRole), nullable=False)
@@ -68,7 +81,9 @@ class ChatMessage(Base):
     # 消息元数据（可选，存储token数量等信息）
     tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # 时间戳
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
 
     # 关联
     conversation: Mapped["ChatConversation"] = relationship(
@@ -77,4 +92,3 @@ class ChatMessage(Base):
 
     def __repr__(self) -> str:
         return f"<ChatMessage(message_id={self.message_id}, role={self.role})>"
-

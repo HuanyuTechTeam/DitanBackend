@@ -1,9 +1,11 @@
 """患者业务逻辑层"""
+
+from datetime import date
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException, ValidationException
-from app.models import Patient, PatientMedicalRecord
+from app.models import Patient
 from app.repositories import PatientRepository, MedicalRecordRepository
 from app.schemas.patient import (
     PatientResponse,
@@ -63,7 +65,7 @@ class PatientService:
         phone: str,
         name: Optional[str] = None,
         sex: Optional[str] = None,
-        birthday: Optional[str] = None,
+        birthday: Optional[date] = None,
     ) -> Patient:
         """
         获取或创建患者
@@ -85,7 +87,7 @@ class PatientService:
         if patient:
             return patient
 
-        if not all([name, sex, birthday]):
+        if name is None or sex is None or birthday is None:
             raise ValidationException(
                 "患者不存在，请提供患者信息",
                 f"手机号 {phone} 未注册",

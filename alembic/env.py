@@ -1,4 +1,5 @@
 """Alembic 环境配置 - 支持异步 SQLAlchemy"""
+
 import asyncio
 from logging.config import fileConfig
 
@@ -50,7 +51,7 @@ def get_url() -> str:
 
 def run_migrations_offline() -> None:
     """以离线模式运行迁移
-    
+
     这种模式下，只生成 SQL 脚本，不实际执行。
     """
     url = get_url()
@@ -77,7 +78,7 @@ async def run_async_migrations() -> None:
     """以异步模式运行迁移"""
     configuration = config.get_section(config.config_ini_section) or {}
     configuration["sqlalchemy.url"] = get_url()
-    
+
     connectable = async_engine_from_config(
         configuration,
         prefix="sqlalchemy.",
@@ -99,4 +100,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

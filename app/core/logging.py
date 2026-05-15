@@ -1,4 +1,5 @@
 """日志配置模块 - JSON 格式输出"""
+
 import json
 import logging
 import sys
@@ -99,7 +100,9 @@ class StructuredLogger:
     def __init__(self, logger: logging.Logger):
         self._logger = logger
 
-    def _log(self, level: int, message: str, data: Optional[dict] = None, exc_info=None):
+    def _log(
+        self, level: int, message: str, data: Optional[dict] = None, exc_info=None
+    ):
         extra = {"extra_data": data} if data else {}
         self._logger.log(level, message, exc_info=exc_info, extra=extra)
 

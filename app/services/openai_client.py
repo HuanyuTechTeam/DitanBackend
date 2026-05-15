@@ -1,4 +1,5 @@
 """OpenAI客户端服务"""
+
 from typing import List, Optional, Any, cast, AsyncGenerator
 
 import httpx
@@ -24,8 +25,12 @@ class OpenAIChatCompletion:
         self.base_url = base_url
         self.model_name = model_name
 
-        self.client = openai.OpenAI(api_key=api_key, base_url=base_url, timeout=STREAM_TIMEOUT)
-        self.async_client = openai.AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=STREAM_TIMEOUT)
+        self.client = openai.OpenAI(
+            api_key=api_key, base_url=base_url, timeout=STREAM_TIMEOUT
+        )
+        self.async_client = openai.AsyncOpenAI(
+            api_key=api_key, base_url=base_url, timeout=STREAM_TIMEOUT
+        )
         logger.info(f"OpenAI客户端初始化: model={model_name}")
 
     def chat(
@@ -61,11 +66,23 @@ class OpenAIChatCompletion:
         messages: List[ChatCompletionMessageParam] = []
 
         if system_message:
-            messages.append(cast(ChatCompletionSystemMessageParam, {"role": "system", "content": system_message}))
+            messages.append(
+                cast(
+                    ChatCompletionSystemMessageParam,
+                    {"role": "system", "content": system_message},
+                )
+            )
 
-        messages.append(cast(ChatCompletionUserMessageParam, {"role": "user", "content": user_message}))
+        messages.append(
+            cast(
+                ChatCompletionUserMessageParam,
+                {"role": "user", "content": user_message},
+            )
+        )
 
-        response = self.chat(messages=messages, temperature=temperature, max_tokens=max_tokens)
+        response = self.chat(
+            messages=messages, temperature=temperature, max_tokens=max_tokens
+        )
         return response.choices[0].message.content
 
     def stream_chat(
@@ -76,7 +93,13 @@ class OpenAIChatCompletion:
         **kwargs,
     ):
         """流式聊天（同步）"""
-        response = self.chat(messages=messages, temperature=temperature, max_tokens=max_tokens, stream=True, **kwargs)
+        response = self.chat(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+            **kwargs,
+        )
 
         for chunk in response:
             if chunk.choices[0].delta.content is not None:
@@ -112,5 +135,7 @@ class OpenAIChatCompletion:
         return {
             "model_name": self.model_name,
             "base_url": self.base_url,
-            "api_key_preview": f"{self.api_key[:8]}...{self.api_key[-4:]}" if len(self.api_key) > 12 else "***",
+            "api_key_preview": f"{self.api_key[:8]}...{self.api_key[-4:]}"
+            if len(self.api_key) > 12
+            else "***",
         }

@@ -1,4 +1,5 @@
 """数据库模型导出"""
+
 from app.models.enums import Gender, DiagnosisType, MedicalRecordStatus
 from app.models.doctor import Doctor
 from app.models.medical import (

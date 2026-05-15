@@ -1,4 +1,5 @@
 """API 依赖注入"""
+
 from typing import Any, Optional
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +13,9 @@ logger = get_structured_logger(__name__)
 class RequestContext:
     """请求上下文"""
 
-    def __init__(self, request: Request, db: AsyncSession, doctor: Doctor = None):
+    def __init__(
+        self, request: Request, db: AsyncSession, doctor: Optional[Doctor] = None
+    ):
         self.request = request
         self.db = db
         self.doctor = doctor
@@ -20,9 +23,18 @@ class RequestContext:
         self.path = request.url.path
         self.endpoint = f"{request.method} {request.url.path}"
 
-    def _build_log_data(self, extra: Optional[dict] = None) -> dict:
+    @property
+    def current_doctor(self) -> Doctor:
+        """获取已认证医生。"""
+        if self.doctor is None:
+            raise RuntimeError(
+                "RequestContext does not include an authenticated doctor"
+            )
+        return self.doctor
+
+    def _build_log_data(self, extra: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """构建日志数据"""
-        data = {
+        data: dict[str, Any] = {
             "method": self.method,
             "path": self.path,
         }
@@ -36,12 +48,14 @@ class RequestContext:
         """记录信息日志"""
         logger.info(message, data=self._build_log_data(extra if extra else None))
 
-    def log_error(self, message: str, exc: Exception = None, **extra: Any):
+    def log_error(self, message: str, exc: Optional[Exception] = None, **extra: Any):
         """记录错误日志"""
         log_data = self._build_log_data(extra if extra else None)
         if exc:
             log_data["error"] = str(exc)
-            logger.error(message, data=log_data, exc_info=(type(exc), exc, exc.__traceback__))
+            logger.error(
+                message, data=log_data, exc_info=(type(exc), exc, exc.__traceback__)
+            )
         else:
             logger.error(message, data=log_data)
 

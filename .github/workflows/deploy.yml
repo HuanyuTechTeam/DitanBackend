@@ -179,9 +179,11 @@ jobs:
             if sudo docker exec ditan_backend uv run alembic upgrade head; then
               echo "✅ 数据库迁移成功"
             else
-              echo "⚠️ 数据库迁移失败，查看详细日志..."
+              echo "❌ 数据库迁移失败，部署中止。当前迁移状态如下:"
               sudo docker exec ditan_backend uv run alembic current || true
-              # 迁移失败不中断部署，可能是首次部署或无需迁移
+              echo "📋 应用日志:"
+              $DOCKER_COMPOSE_CMD logs --tail=80 app || true
+              exit 1
             fi
             
             echo "🧹 清理未使用的镜像..."

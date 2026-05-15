@@ -1,4 +1,6 @@
 """患者数据访问层"""
+
+from datetime import date
 from typing import Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +29,7 @@ class PatientRepository(BaseRepository[Patient]):
         self,
         name: str,
         sex: str,
-        birthday: str,
+        birthday: date,
         phone: str,
     ) -> Patient:
         """创建新患者"""

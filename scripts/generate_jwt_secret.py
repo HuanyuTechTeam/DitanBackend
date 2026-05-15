@@ -26,7 +26,7 @@ def generate_secret(nbytes: int, fmt: str) -> str:
         return secrets.token_urlsafe(nbytes)
     elif fmt == "base64":
         raw = secrets.token_bytes(nbytes)
-        return base64.b64encode(raw).decode('ascii')
+        return base64.b64encode(raw).decode("ascii")
     else:
         raise ValueError("Unsupported format: " + fmt)
 
@@ -59,16 +59,31 @@ def append_env_file(path: str, key: str, value: str):
 
 def main():
     p = argparse.ArgumentParser(description="生成强随机 JWT_SECRET_KEY")
-    p.add_argument("--bytes", type=int, default=32,
-                   help="生成的随机原始字节长度（默认 32 bytes = 256 bits）。更高的字节数更强壮。")
-    p.add_argument("--format", choices=["hex", "urlsafe", "base64"], default="urlsafe",
-                   help="输出格式：hex / urlsafe / base64（默认 urlsafe）。urlsafe 常用于 env 与 URL。")
-    p.add_argument("--outfile", type=str, default=None,
-                   help="将密钥写入文件（覆盖）。")
-    p.add_argument("--envfile", type=str, default=None,
-                   help="将密钥以 KEY=VALUE 追加到指定的 env 文件（不会覆盖文件，只追加）。")
-    p.add_argument("--envvar", type=str, default="JWT_SECRET_KEY",
-                   help="如果使用 --envfile，指定环境变量名（默认 JWT_SECRET_KEY）。")
+    p.add_argument(
+        "--bytes",
+        type=int,
+        default=32,
+        help="生成的随机原始字节长度（默认 32 bytes = 256 bits）。更高的字节数更强壮。",
+    )
+    p.add_argument(
+        "--format",
+        choices=["hex", "urlsafe", "base64"],
+        default="urlsafe",
+        help="输出格式：hex / urlsafe / base64（默认 urlsafe）。urlsafe 常用于 env 与 URL。",
+    )
+    p.add_argument("--outfile", type=str, default=None, help="将密钥写入文件（覆盖）。")
+    p.add_argument(
+        "--envfile",
+        type=str,
+        default=None,
+        help="将密钥以 KEY=VALUE 追加到指定的 env 文件（不会覆盖文件，只追加）。",
+    )
+    p.add_argument(
+        "--envvar",
+        type=str,
+        default="JWT_SECRET_KEY",
+        help="如果使用 --envfile，指定环境变量名（默认 JWT_SECRET_KEY）。",
+    )
     args = p.parse_args()
 
     if args.bytes <= 0:
@@ -89,8 +104,12 @@ def main():
     # 安全提示
     print("\n安全提示：")
     print("- 请不要把生成的密钥提交到版本控制（git 等）。")
-    print("- 生产环境优先使用专用密钥管理服务（如 Vault、AWS Secrets Manager、Azure Key Vault）。")
-    print("- 如果用于生产，请确保密钥至少为 32 bytes（256-bit），更高长度更安全（例如 64 bytes）。")
+    print(
+        "- 生产环境优先使用专用密钥管理服务（如 Vault、AWS Secrets Manager、Azure Key Vault）。"
+    )
+    print(
+        "- 如果用于生产，请确保密钥至少为 32 bytes（256-bit），更高长度更安全（例如 64 bytes）。"
+    )
 
 
 if __name__ == "__main__":

@@ -1,16 +1,21 @@
 """诊断业务逻辑层"""
-import json
-from typing import Optional, Any, AsyncGenerator
+
+from typing import Optional, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_settings
-from app.core.exceptions import NotFoundException, ValidationException, DatabaseException
+from app.core.exceptions import (
+    NotFoundException,
+    ValidationException,
+    DatabaseException,
+)
 from app.models import Doctor, AIDiagnosisRecord
 from app.repositories import (
     MedicalRecordRepository,
     AIDiagnosisRepository,
     DoctorDiagnosisRepository,
 )
+from app.schemas.common import DiagnosisType as SchemaDiagnosisType
 from app.schemas.patient import (
     AIDiagnosisCreate,
     AIDiagnosisResponse,
@@ -75,7 +80,9 @@ class DiagnosisService:
             weight = medical_record.pre_diagnosis.weight
             coze_conversation_log = medical_record.pre_diagnosis.coze_conversation_log
             if medical_record.pre_diagnosis.sanzhen_result:
-                sanzhen_diagnosis = medical_record.pre_diagnosis.sanzhen_result.diagnosis_result
+                sanzhen_diagnosis = (
+                    medical_record.pre_diagnosis.sanzhen_result.diagnosis_result
+                )
 
         # 调用 TCM 服务
         tcm_service = tcm_service or get_tcm_service()
@@ -142,7 +149,7 @@ class DiagnosisService:
             raise NotFoundException(f"未找到就诊记录 ID: {record_id}")
 
         # 提取预诊信息
-        params = {
+        params: dict[str, float | str | None] = {
             "height": None,
             "weight": None,
             "coze_conversation_log": None,
@@ -279,7 +286,7 @@ class DiagnosisService:
         return DoctorDiagnosisResponse(
             diagnosis_id=doctor_diagnosis.diagnosis_id,
             record_id=doctor_diagnosis.record_id,
-            type=doctor_diagnosis.type,
+            type=SchemaDiagnosisType(doctor_diagnosis.type.value),
             doctor_id=doctor_diagnosis.doctor_id,
             doctor_name=doctor.name,
             formatted_medical_record=doctor_diagnosis.formatted_medical_record,
@@ -321,7 +328,9 @@ class DiagnosisService:
             raise NotFoundException(f"未找到医生诊断记录 ID: {diagnosis_id}")
 
         if doctor_diagnosis.doctor_id != doctor.doctor_id:
-            raise ValidationException("无权修改此诊断记录", "只能修改自己创建的诊断记录")
+            raise ValidationException(
+                "无权修改此诊断记录", "只能修改自己创建的诊断记录"
+            )
 
         if doctor_diagnosis.medical_record.status == "confirmed":
             raise ValidationException(
@@ -338,7 +347,7 @@ class DiagnosisService:
         return DoctorDiagnosisResponse(
             diagnosis_id=doctor_diagnosis.diagnosis_id,
             record_id=doctor_diagnosis.record_id,
-            type=doctor_diagnosis.type,
+            type=SchemaDiagnosisType(doctor_diagnosis.type.value),
             doctor_id=doctor_diagnosis.doctor_id,
             doctor_name=doctor.name,
             formatted_medical_record=doctor_diagnosis.formatted_medical_record,
@@ -377,7 +386,7 @@ class DiagnosisService:
         return DoctorDiagnosisResponse(
             diagnosis_id=doctor_diagnosis.diagnosis_id,
             record_id=doctor_diagnosis.record_id,
-            type=doctor_diagnosis.type,
+            type=SchemaDiagnosisType(doctor_diagnosis.type.value),
             doctor_id=doctor_diagnosis.doctor_id,
             doctor_name=(
                 doctor_diagnosis.doctor.name if doctor_diagnosis.doctor else None

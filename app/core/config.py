@@ -1,4 +1,5 @@
 """环境配置模块"""
+
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -54,4 +55,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """获取配置单例"""
-    return Settings()
+    return Settings()  # type: ignore[call-arg]

@@ -1,4 +1,5 @@
 """患者与就诊相关数据库模型"""
+
 from datetime import datetime, date
 from typing import Optional, List
 
@@ -14,16 +15,18 @@ class Patient(Base):
 
     __tablename__ = "patients"
 
-    patient_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    patient_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     sex: Mapped[Gender] = mapped_column(Enum(Gender), nullable=False)
     birthday: Mapped[date] = mapped_column(Date, nullable=False)
-    phone: Mapped[str] = mapped_column(String(11), nullable=False, index=True, unique=True)
+    phone: Mapped[str] = mapped_column(
+        String(11), nullable=False, index=True, unique=True
+    )
 
     medical_records: Mapped[List["PatientMedicalRecord"]] = relationship(
-        "PatientMedicalRecord",
-        back_populates="patient",
-        cascade="all, delete-orphan"
+        "PatientMedicalRecord", back_populates="patient", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -35,32 +38,40 @@ class PatientMedicalRecord(Base):
 
     __tablename__ = "patient_medical_records"
 
-    record_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    record_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
     patient_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("patients.patient_id"), nullable=False, index=True
     )
-    uuid: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
+    uuid: Mapped[str] = mapped_column(
+        String(36), nullable=False, unique=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
-    patient: Mapped["Patient"] = relationship("Patient", back_populates="medical_records")
+    patient: Mapped["Patient"] = relationship(
+        "Patient", back_populates="medical_records"
+    )
     pre_diagnosis: Mapped[Optional["PreDiagnosisRecord"]] = relationship(
         "PreDiagnosisRecord",
         back_populates="medical_record",
         uselist=False,
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
     diagnoses: Mapped[List["DiagnosisRecord"]] = relationship(
-        "DiagnosisRecord",
-        back_populates="medical_record",
-        cascade="all, delete-orphan"
+        "DiagnosisRecord", back_populates="medical_record", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
-        return f"<PatientMedicalRecord(record_id={self.record_id}, status={self.status})>"
+        return (
+            f"<PatientMedicalRecord(record_id={self.record_id}, status={self.status})>"
+        )
 
 
 class PreDiagnosisRecord(Base):
@@ -68,16 +79,25 @@ class PreDiagnosisRecord(Base):
 
     __tablename__ = "pre_diagnosis_records"
 
-    pre_diagnosis_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    record_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("patient_medical_records.record_id"),
-        nullable=False, unique=True, index=True
+    pre_diagnosis_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
     )
-    uuid: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
+    record_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("patient_medical_records.record_id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    uuid: Mapped[str] = mapped_column(
+        String(36), nullable=False, unique=True, index=True
+    )
     height: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     coze_conversation_log: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
@@ -89,7 +109,7 @@ class PreDiagnosisRecord(Base):
         "SanzhenAnalysisResult",
         back_populates="pre_diagnosis",
         uselist=False,
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:
@@ -101,17 +121,26 @@ class SanzhenAnalysisResult(Base):
 
     __tablename__ = "sanzhen_analysis_results"
 
-    sanzhen_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sanzhen_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
     pre_diagnosis_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("pre_diagnosis_records.pre_diagnosis_id"),
-        nullable=False, unique=True, index=True
+        Integer,
+        ForeignKey("pre_diagnosis_records.pre_diagnosis_id"),
+        nullable=False,
+        unique=True,
+        index=True,
     )
     face: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     face_image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     tongue_front: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    tongue_front_image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    tongue_front_image_url: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
     tongue_bottom: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    tongue_bottom_image_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    tongue_bottom_image_url: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
     pulse: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     diagnosis_result: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
 
@@ -128,9 +157,14 @@ class DiagnosisRecord(Base):
 
     __tablename__ = "diagnosis_records"
 
-    diagnosis_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    diagnosis_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
     record_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("patient_medical_records.record_id"), nullable=False, index=True
+        Integer,
+        ForeignKey("patient_medical_records.record_id"),
+        nullable=False,
+        index=True,
     )
     type: Mapped[DiagnosisType] = mapped_column(Enum(DiagnosisType), nullable=False)
     formatted_medical_record: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -138,14 +172,16 @@ class DiagnosisRecord(Base):
     treatment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     prescription: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     exercise_prescription: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
     __mapper_args__ = {
         "polymorphic_identity": "diagnosis_record",
-        "polymorphic_on": "type"
+        "polymorphic_on": "type",
     }
 
     medical_record: Mapped["PatientMedicalRecord"] = relationship(
@@ -189,7 +225,9 @@ class DoctorDiagnosisRecord(DiagnosisRecord):
 
     __mapper_args__ = {"polymorphic_identity": DiagnosisType.DOCTOR_DIAGNOSIS}
 
-    doctor: Mapped["Doctor"] = relationship("Doctor", back_populates="diagnosis_records")
+    doctor: Mapped["Doctor"] = relationship(
+        "Doctor", back_populates="diagnosis_records"
+    )
 
     def __repr__(self) -> str:
         return f"<DoctorDiagnosisRecord(diagnosis_id={self.diagnosis_id})>"
@@ -197,4 +235,3 @@ class DoctorDiagnosisRecord(DiagnosisRecord):
 
 # 为了避免循环导入，在文件末尾导入
 from app.models.doctor import Doctor  # noqa: E402, F811
-

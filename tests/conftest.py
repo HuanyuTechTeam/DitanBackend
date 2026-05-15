@@ -1,4 +1,5 @@
 """测试配置"""
+
 import asyncio
 import os
 from typing import AsyncGenerator
@@ -25,7 +26,9 @@ from main import app
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-test_session_maker = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+test_session_maker = async_sessionmaker(
+    test_engine, class_=AsyncSession, expire_on_commit=False
+)
 
 
 @pytest.fixture(scope="session")
@@ -70,7 +73,9 @@ async def test_doctor(db_session: AsyncSession) -> Doctor:
 @pytest.fixture(scope="function")
 def auth_token(test_doctor: Doctor) -> str:
     """创建测试认证令牌"""
-    return create_access_token(data={"doctor_id": test_doctor.doctor_id, "username": test_doctor.username})
+    return create_access_token(
+        data={"doctor_id": test_doctor.doctor_id, "username": test_doctor.username}
+    )
 
 
 @pytest.fixture(scope="function")

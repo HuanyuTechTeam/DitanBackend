@@ -1,4 +1,5 @@
 """API 路由汇总"""
+
 from fastapi import APIRouter
 
 from app.api.doctor import router as doctor_router

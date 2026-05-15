@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from openai.types.chat import (
     ChatCompletionMessageParam,
     ChatCompletionUserMessageParam,
-    ChatCompletionSystemMessageParam
+    ChatCompletionSystemMessageParam,
 )
 
 load_dotenv()
@@ -101,14 +101,14 @@ DIAGNOSIS_PROMPT_3 = """
 class OpenAIChatCompletion:
     """
     OpenAI Chat Completion API的简单封装类
-    
+
     用于方便地调用OpenAI的聊天完成API，支持自定义API密钥、基础URL和模型名称。
     """
 
     def __init__(self, api_key: str, base_url: str, model_name: str):
         """
         初始化OpenAI Chat Completion客户端
-        
+
         Args:
             api_key (str): OpenAI API密钥
             base_url (str): API基础URL
@@ -119,26 +119,26 @@ class OpenAIChatCompletion:
         self.model_name = model_name
 
         # 初始化OpenAI客户端
-        self.client = openai.OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
+        self.client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url)
 
-    def chat(self, messages: List[ChatCompletionMessageParam],
-             temperature: float = 0.7,
-             max_tokens: Optional[int] = None,
-             stream: bool = False,
-             **kwargs) -> Any:
+    def chat(
+        self,
+        messages: List[ChatCompletionMessageParam],
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        stream: bool = False,
+        **kwargs,
+    ) -> Any:
         """
         发送聊天完成请求
-        
+
         Args:
             messages (List[ChatCompletionMessageParam]): 消息列表，格式为[{"role": "user", "content": "消息内容"}]
             temperature (float): 温度参数，控制输出的随机性 (0-2)
             max_tokens (Optional[int]): 最大token数量
             stream (bool): 是否使用流式输出
             **kwargs: 其他OpenAI API参数
-            
+
         Returns:
             OpenAI API响应对象
         """
@@ -149,63 +149,71 @@ class OpenAIChatCompletion:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 stream=stream,
-                **kwargs
+                **kwargs,
             )
             return response
         except Exception as e:
             print(f"调用OpenAI API时发生错误: {e}")
             raise e
 
-    def simple_chat(self, user_message: str,
-                    system_message: Optional[str] = None,
-                    temperature: float = 0.7,
-                    max_tokens: Optional[int] = None) -> str:
+    def simple_chat(
+        self,
+        user_message: str,
+        system_message: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+    ) -> str:
         """
         简单的单轮对话方法
-        
+
         Args:
             user_message (str): 用户消息
             system_message (Optional[str]): 系统消息（可选）
             temperature (float): 温度参数
             max_tokens (Optional[int]): 最大token数量
-            
+
         Returns:
             str: AI的回复内容
         """
         messages: List[ChatCompletionMessageParam] = []
 
         if system_message:
-            messages.append(cast(ChatCompletionSystemMessageParam, {
-                "role": "system",
-                "content": system_message
-            }))
+            messages.append(
+                cast(
+                    ChatCompletionSystemMessageParam,
+                    {"role": "system", "content": system_message},
+                )
+            )
 
-        messages.append(cast(ChatCompletionUserMessageParam, {
-            "role": "user",
-            "content": user_message
-        }))
+        messages.append(
+            cast(
+                ChatCompletionUserMessageParam,
+                {"role": "user", "content": user_message},
+            )
+        )
 
         response = self.chat(
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens
+            messages=messages, temperature=temperature, max_tokens=max_tokens
         )
 
         return response.choices[0].message.content
 
-    def stream_chat(self, messages: List[ChatCompletionMessageParam],
-                    temperature: float = 0.7,
-                    max_tokens: Optional[int] = None,
-                    **kwargs):
+    def stream_chat(
+        self,
+        messages: List[ChatCompletionMessageParam],
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        **kwargs,
+    ):
         """
         流式聊天方法
-        
+
         Args:
             messages (List[ChatCompletionMessageParam]): 消息列表
             temperature (float): 温度参数
             max_tokens (Optional[int]): 最大token数量
             **kwargs: 其他OpenAI API参数
-            
+
         Yields:
             流式响应的每个chunk
         """
@@ -214,7 +222,7 @@ class OpenAIChatCompletion:
             temperature=temperature,
             max_tokens=max_tokens,
             stream=True,
-            **kwargs
+            **kwargs,
         )
 
         for chunk in response:
@@ -224,14 +232,16 @@ class OpenAIChatCompletion:
     def get_model_info(self) -> Dict[str, str]:
         """
         获取当前配置的模型信息
-        
+
         Returns:
             Dict[str, str]: 包含模型配置信息的字典
         """
         return {
             "model_name": self.model_name,
             "base_url": self.base_url,
-            "api_key_preview": f"{self.api_key[:8]}...{self.api_key[-4:]}" if len(self.api_key) > 12 else "***"
+            "api_key_preview": f"{self.api_key[:8]}...{self.api_key[-4:]}"
+            if len(self.api_key) > 12
+            else "***",
         }
 
 
@@ -251,7 +261,14 @@ PROMPTS = {
     "p3": DIAGNOSIS_PROMPT_3,
 }
 
-def build_prompt(template: str, basic_info: str, chief_complaint: str, present_illness: str, four_diagnosis: str) -> str:
+
+def build_prompt(
+    template: str,
+    basic_info: str,
+    chief_complaint: str,
+    present_illness: str,
+    four_diagnosis: str,
+) -> str:
     medical_record = (
         f"基本信息（脱敏）: {basic_info}\n"
         f"主诉: {chief_complaint}\n"
@@ -259,8 +276,7 @@ def build_prompt(template: str, basic_info: str, chief_complaint: str, present_i
     )
     tcm_sizhen_record = f"{four_diagnosis}"
     return template.format(
-        medical_record=medical_record,
-        tcm_sizhen_record=tcm_sizhen_record
+        medical_record=medical_record, tcm_sizhen_record=tcm_sizhen_record
     )
 
 
@@ -280,7 +296,9 @@ def tcm_diagnosis(
     meta 包含: attempts, total_seconds, last_finish_reason, last_usage, error
     """
     template = PROMPTS[prompt_key]
-    prompt = build_prompt(template, basic_info, chief_complaint, present_illness, four_diagnosis)
+    prompt = build_prompt(
+        template, basic_info, chief_complaint, present_illness, four_diagnosis
+    )
 
     meta: Dict[str, Any] = {
         "attempts": 0,
@@ -310,7 +328,12 @@ def tcm_diagnosis(
             usage = getattr(response, "usage", None)
 
             meta["last_finish_reason"] = finish_reason
-            meta["last_usage"] = usage.model_dump() if hasattr(usage, "model_dump") else (dict(usage) if usage else None)
+            if usage is None:
+                meta["last_usage"] = None
+            elif hasattr(usage, "model_dump"):
+                meta["last_usage"] = cast(Any, usage).model_dump()
+            else:
+                meta["last_usage"] = dict(usage)
 
             last_raw = content
             answer = extract_answer(content)
@@ -341,7 +364,7 @@ def tcm_diagnosis(
             meta["error"] = f"{type(e).__name__}: {e}"
 
         if attempt < max_retries:
-            backoff = (0.8 * (2 ** attempt)) + random.uniform(0, 0.3)
+            backoff = (0.8 * (2**attempt)) + random.uniform(0, 0.3)
             time.sleep(backoff)
 
     meta["total_seconds"] = time.perf_counter() - start_total
@@ -365,7 +388,9 @@ def main():
     if not base_url or not model_name:
         raise RuntimeError("base_url 和 model_name 没有配置好")
 
-    llm = OpenAIChatCompletion(api_key=api_key, base_url=base_url, model_name=model_name)
+    llm = OpenAIChatCompletion(
+        api_key=api_key, base_url=base_url, model_name=model_name
+    )
 
     df = pd.read_excel(input_file)
 
@@ -407,18 +432,29 @@ def main():
             try:
                 answer, raw, meta = fut.result()
             except Exception as e:
-                answer, raw, meta = "", "", {
-                    "attempts": 0, "total_seconds": 0.0, "last_attempt_seconds": 0.0,
-                    "last_finish_reason": "", "last_usage": None,
-                    "error": f"{type(e).__name__}: {e}"
-                }
+                answer, raw, meta = (
+                    "",
+                    "",
+                    {
+                        "attempts": 0,
+                        "total_seconds": 0.0,
+                        "last_attempt_seconds": 0.0,
+                        "last_finish_reason": "",
+                        "last_usage": None,
+                        "error": f"{type(e).__name__}: {e}",
+                    },
+                )
 
             df.at[idx, f"中医辩证_{k}"] = answer
             df.at[idx, f"大模型输出_{k}"] = raw
             df.at[idx, f"尝试次数_{k}"] = meta.get("attempts", 0)
             df.at[idx, f"总耗时秒_{k}"] = float(meta.get("total_seconds", 0.0) or 0.0)
-            df.at[idx, f"最后一次耗时秒_{k}"] = float(meta.get("last_attempt_seconds", 0.0) or 0.0)
-            df.at[idx, f"finish_reason_{k}"] = str(meta.get("last_finish_reason", "") or "")
+            df.at[idx, f"最后一次耗时秒_{k}"] = float(
+                meta.get("last_attempt_seconds", 0.0) or 0.0
+            )
+            df.at[idx, f"finish_reason_{k}"] = str(
+                meta.get("last_finish_reason", "") or ""
+            )
             df.at[idx, f"usage_{k}"] = str(meta.get("last_usage", "") or "")
             df.at[idx, f"error_{k}"] = str(meta.get("error", "") or "")
 

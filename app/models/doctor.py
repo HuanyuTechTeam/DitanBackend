@@ -1,4 +1,5 @@
 """医生相关数据库模型"""
+
 from datetime import datetime
 from typing import Optional, List, TYPE_CHECKING
 
@@ -17,27 +18,32 @@ class Doctor(Base):
 
     __tablename__ = "doctors"
 
-    doctor_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    doctor_id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    username: Mapped[str] = mapped_column(
+        String(50), nullable=False, unique=True, index=True
+    )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     gender: Mapped[Gender] = mapped_column(Enum(Gender), nullable=False)
-    phone: Mapped[str] = mapped_column(String(11), nullable=False, unique=True, index=True)
+    phone: Mapped[str] = mapped_column(
+        String(11), nullable=False, unique=True, index=True
+    )
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     position: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     diagnosis_records: Mapped[List["DoctorDiagnosisRecord"]] = relationship(
-        "DoctorDiagnosisRecord",
-        back_populates="doctor",
-        cascade="all, delete-orphan"
+        "DoctorDiagnosisRecord", back_populates="doctor", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
         return f"<Doctor(doctor_id={self.doctor_id}, username={self.username})>"
-

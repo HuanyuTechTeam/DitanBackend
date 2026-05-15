@@ -1,4 +1,5 @@
 """聊天 API 路由"""
+
 import json
 
 from fastapi import APIRouter, Depends, Path
@@ -153,7 +154,9 @@ async def chat_stream(
     chat_service = get_chat_service()
 
     # 检查会话是否存在
-    conversation = await chat_service.get_conversation(ctx.db, data.session_id, load_messages=False)
+    conversation = await chat_service.get_conversation(
+        ctx.db, data.session_id, load_messages=False
+    )
     if not conversation:
         raise NotFoundException(f"会话不存在: {data.session_id}")
 
@@ -183,7 +186,9 @@ async def chat_stream(
     )
 
 
-@router.delete("/conversation/{session_id}", response_model=APIResponse, status_code=200)
+@router.delete(
+    "/conversation/{session_id}", response_model=APIResponse, status_code=200
+)
 async def close_conversation(
     session_id: str = Path(..., description="会话ID"),
     ctx: RequestContext = Depends(get_request_context),

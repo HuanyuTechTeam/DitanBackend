@@ -1,8 +1,8 @@
 """Repository 基础类"""
+
 from typing import TypeVar, Generic, Type, Optional, Sequence, Any
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 T = TypeVar("T")
 
@@ -60,7 +60,9 @@ class BaseRepository(Generic[T]):
         """提交事务"""
         await self.db.commit()
 
-    async def refresh(self, entity: T, attribute_names: Optional[list[str]] = None) -> T:
+    async def refresh(
+        self, entity: T, attribute_names: Optional[list[str]] = None
+    ) -> T:
         """刷新实体"""
         await self.db.refresh(entity, attribute_names=attribute_names)
         return entity

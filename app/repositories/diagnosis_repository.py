@@ -1,4 +1,5 @@
 """诊断记录数据访问层"""
+
 from typing import Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +15,9 @@ class AIDiagnosisRepository(BaseRepository[AIDiagnosisRecord]):
     def __init__(self, db: AsyncSession):
         super().__init__(db, AIDiagnosisRecord)
 
-    async def get_by_diagnosis_id(self, diagnosis_id: int) -> Optional[AIDiagnosisRecord]:
+    async def get_by_diagnosis_id(
+        self, diagnosis_id: int
+    ) -> Optional[AIDiagnosisRecord]:
         """根据诊断ID获取"""
         return await self.get_by_id(diagnosis_id, "diagnosis_id")
 

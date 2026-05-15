@@ -1,4 +1,5 @@
 """医生用户相关 API 路由"""
+
 from fastapi import APIRouter, Depends
 
 from app.api.deps import RequestContext, get_request_context, get_auth_context
@@ -69,10 +70,11 @@ async def login_doctor(
 async def get_current_doctor_info(ctx: RequestContext = Depends(get_auth_context)):
     """获取当前登录医生的信息"""
     try:
-        ctx.log_info(f"查询信息: doctor_id={ctx.doctor.doctor_id}")
+        doctor = ctx.current_doctor
+        ctx.log_info(f"查询信息: doctor_id={doctor.doctor_id}")
 
         service = DoctorService(ctx.db)
-        result = await service.get_doctor_info(ctx.doctor)
+        result = await service.get_doctor_info(doctor)
 
         return APIResponse(
             success=True,
@@ -93,12 +95,13 @@ async def update_current_doctor_info(
 ):
     """更新当前登录医生的信息"""
     try:
-        ctx.log_info(f"更新信息: doctor_id={ctx.doctor.doctor_id}")
+        doctor = ctx.current_doctor
+        ctx.log_info(f"更新信息: doctor_id={doctor.doctor_id}")
 
         service = DoctorService(ctx.db)
-        result = await service.update_doctor_info(ctx.doctor, update_data)
+        result = await service.update_doctor_info(doctor, update_data)
 
-        ctx.log_info(f"更新成功: doctor_id={ctx.doctor.doctor_id}")
+        ctx.log_info(f"更新成功: doctor_id={doctor.doctor_id}")
         return APIResponse(
             success=True,
             message="医生信息更新成功",
@@ -118,12 +121,13 @@ async def change_password(
 ):
     """修改当前登录医生的密码"""
     try:
-        ctx.log_info(f"修改密码: doctor_id={ctx.doctor.doctor_id}")
+        doctor = ctx.current_doctor
+        ctx.log_info(f"修改密码: doctor_id={doctor.doctor_id}")
 
         service = DoctorService(ctx.db)
-        await service.change_password(ctx.doctor, password_data)
+        await service.change_password(doctor, password_data)
 
-        ctx.log_info(f"密码修改成功: doctor_id={ctx.doctor.doctor_id}")
+        ctx.log_info(f"密码修改成功: doctor_id={doctor.doctor_id}")
         return APIResponse(success=True, message="密码修改成功", data=None)
     except Exception as e:
         if hasattr(e, "message"):

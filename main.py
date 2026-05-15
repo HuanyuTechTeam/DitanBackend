@@ -1,4 +1,5 @@
 """DitanBackend 主应用入口"""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -69,7 +70,9 @@ async def api_exception_handler(request: Request, exc: BaseAPIException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """处理请求验证异常"""
     errors = exc.errors()
-    error_messages = [f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in errors]
+    error_messages = [
+        f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in errors
+    ]
     error_detail = "; ".join(error_messages)
 
     log_error(logger, f"请求验证失败: {error_detail}")

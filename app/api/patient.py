@@ -1,7 +1,8 @@
 """病人数据和诊断相关 API 路由"""
+
 import json
 
-from fastapi import APIRouter, Depends, Query, Path
+from fastapi import APIRouter, Body, Depends, Query, Path
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import RequestContext, get_request_context, get_auth_context
@@ -100,10 +101,14 @@ async def get_medical_record(
         raise DatabaseException("查询就诊记录时发生错误", str(e))
 
 
-@router.post("/medical-record/{record_id}/ai-diagnosis", response_model=APIResponse, status_code=201)
+@router.post(
+    "/medical-record/{record_id}/ai-diagnosis",
+    response_model=APIResponse,
+    status_code=201,
+)
 async def create_ai_diagnosis(
     record_id: int = Path(..., description="就诊记录ID"),
-    diagnosis_data: AIDiagnosisCreate = ...,
+    diagnosis_data: AIDiagnosisCreate = Body(...),
     ctx: RequestContext = Depends(get_auth_context),
 ):
     """为就诊记录生成AI诊断"""
@@ -133,14 +138,16 @@ async def create_ai_diagnosis(
 @router.post("/medical-record/{record_id}/ai-diagnosis/stream", status_code=200)
 async def create_ai_diagnosis_stream(
     record_id: int = Path(..., description="就诊记录ID"),
-    diagnosis_data: AIDiagnosisCreate = ...,
+    diagnosis_data: AIDiagnosisCreate = Body(...),
     ctx: RequestContext = Depends(get_auth_context),
 ):
     """为就诊记录生成AI诊断（流式返回）"""
     ctx.log_info(f"流式AI诊断: record_id={record_id}")
 
     service = DiagnosisService(ctx.db)
-    medical_record, params = await service.stream_ai_diagnosis(record_id, diagnosis_data)
+    medical_record, params = await service.stream_ai_diagnosis(
+        record_id, diagnosis_data
+    )
 
     diagnosis_result_holder = {"data": None}
 
@@ -166,12 +173,17 @@ async def create_ai_diagnosis_stream(
         async for event_data in generate_stream():
             yield event_data
 
-        if diagnosis_result_holder["data"] and diagnosis_result_holder["data"].get("status") == "success":
+        if (
+            diagnosis_result_holder["data"]
+            and diagnosis_result_holder["data"].get("status") == "success"
+        ):
             try:
                 ai_diagnosis = await service.save_stream_diagnosis_result(
                     record_id, diagnosis_result_holder["data"]
                 )
-                ctx.log_info(f"流式AI诊断保存成功: diagnosis_id={ai_diagnosis.diagnosis_id}")
+                ctx.log_info(
+                    f"流式AI诊断保存成功: diagnosis_id={ai_diagnosis.diagnosis_id}"
+                )
                 yield f"event: saved\ndata: {json.dumps({'diagnosis_id': ai_diagnosis.diagnosis_id, 'message': '诊断记录已保存'}, ensure_ascii=False)}\n\n"
             except Exception as e:
                 ctx.log_error("保存诊断记录失败", e)
@@ -188,18 +200,27 @@ async def create_ai_diagnosis_stream(
     )
 
 
-@router.post("/medical-record/{record_id}/doctor-diagnosis", response_model=APIResponse, status_code=201)
+@router.post(
+    "/medical-record/{record_id}/doctor-diagnosis",
+    response_model=APIResponse,
+    status_code=201,
+)
 async def create_doctor_diagnosis(
     record_id: int = Path(..., description="就诊记录ID"),
-    diagnosis_data: DoctorDiagnosisCreate = ...,
+    diagnosis_data: DoctorDiagnosisCreate = Body(...),
     ctx: RequestContext = Depends(get_auth_context),
 ):
     """创建医生诊断记录"""
     try:
-        ctx.log_info(f"创建医生诊断: record_id={record_id}, doctor_id={ctx.doctor.doctor_id}")
+        doctor = ctx.current_doctor
+        ctx.log_info(
+            f"创建医生诊断: record_id={record_id}, doctor_id={doctor.doctor_id}"
+        )
 
         service = DiagnosisService(ctx.db)
-        result = await service.create_doctor_diagnosis(record_id, ctx.doctor, diagnosis_data)
+        result = await service.create_doctor_diagnosis(
+            record_id, doctor, diagnosis_data
+        )
 
         ctx.log_info(f"医生诊断创建成功: diagnosis_id={result.diagnosis_id}")
         return APIResponse(
@@ -214,18 +235,23 @@ async def create_doctor_diagnosis(
         raise DatabaseException("创建医生诊断记录时发生错误", str(e))
 
 
-@router.put("/doctor-diagnosis/{diagnosis_id}", response_model=APIResponse, status_code=200)
+@router.put(
+    "/doctor-diagnosis/{diagnosis_id}", response_model=APIResponse, status_code=200
+)
 async def update_doctor_diagnosis(
     diagnosis_id: int = Path(..., description="诊断记录ID"),
-    diagnosis_data: DoctorDiagnosisUpdate = ...,
+    diagnosis_data: DoctorDiagnosisUpdate = Body(...),
     ctx: RequestContext = Depends(get_auth_context),
 ):
     """更新医生诊断记录"""
     try:
+        doctor = ctx.current_doctor
         ctx.log_info(f"更新医生诊断: diagnosis_id={diagnosis_id}")
 
         service = DiagnosisService(ctx.db)
-        result = await service.update_doctor_diagnosis(diagnosis_id, ctx.doctor, diagnosis_data)
+        result = await service.update_doctor_diagnosis(
+            diagnosis_id, doctor, diagnosis_data
+        )
 
         ctx.log_info(f"医生诊断更新成功: diagnosis_id={diagnosis_id}")
         return APIResponse(
@@ -240,7 +266,9 @@ async def update_doctor_diagnosis(
         raise DatabaseException("更新医生诊断记录时发生错误", str(e))
 
 
-@router.get("/doctor-diagnosis/{diagnosis_id}", response_model=APIResponse, status_code=200)
+@router.get(
+    "/doctor-diagnosis/{diagnosis_id}", response_model=APIResponse, status_code=200
+)
 async def get_doctor_diagnosis(
     diagnosis_id: int = Path(..., description="诊断记录ID"),
     ctx: RequestContext = Depends(get_auth_context),
@@ -265,17 +293,20 @@ async def get_doctor_diagnosis(
         raise DatabaseException("查询医生诊断记录时发生错误", str(e))
 
 
-@router.post("/medical-record/{record_id}/confirm", response_model=APIResponse, status_code=200)
+@router.post(
+    "/medical-record/{record_id}/confirm", response_model=APIResponse, status_code=200
+)
 async def confirm_medical_record(
     record_id: int = Path(..., description="就诊记录ID"),
     ctx: RequestContext = Depends(get_auth_context),
 ):
     """确认就诊完成"""
     try:
-        ctx.log_info(f"确认就诊: record_id={record_id}, doctor_id={ctx.doctor.doctor_id}")
+        doctor = ctx.current_doctor
+        ctx.log_info(f"确认就诊: record_id={record_id}, doctor_id={doctor.doctor_id}")
 
         service = MedicalRecordService(ctx.db)
-        result = await service.confirm_record(record_id, ctx.doctor.name)
+        result = await service.confirm_record(record_id, doctor.name)
 
         ctx.log_info(f"就诊确认成功: record_id={record_id}")
         return APIResponse(
