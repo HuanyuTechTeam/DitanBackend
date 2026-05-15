@@ -1,4 +1,5 @@
 """Schema 模块导出"""
+
 from app.schemas.common import (
     Gender,
     DiagnosisType,

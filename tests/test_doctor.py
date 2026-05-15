@@ -1,6 +1,7 @@
 """
 医生管理相关API测试
 """
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +21,7 @@ class TestDoctorRegistration:
             "phone": "13800138000",
             "department": "中医科",
             "position": "主治医师",
-            "bio": "擅长中医诊疗"
+            "bio": "擅长中医诊疗",
         }
 
         response = await client.post("/api/v1/doctor/register", json=doctor_data)
@@ -41,7 +42,7 @@ class TestDoctorRegistration:
             "password": "password123",
             "name": "张医生",
             "gender": "MALE",
-            "phone": "13800138000"
+            "phone": "13800138000",
         }
 
         # 第一次注册
@@ -63,7 +64,7 @@ class TestDoctorRegistration:
             "password": "password123",
             "name": "张医生",
             "gender": "MALE",
-            "phone": "13800138000"
+            "phone": "13800138000",
         }
 
         # 第一次注册
@@ -85,7 +86,7 @@ class TestDoctorRegistration:
             "password": "password123",
             "name": "张医生",
             "gender": "MALE",
-            "phone": "13800138000"
+            "phone": "13800138000",
         }
 
         response = await client.post("/api/v1/doctor/register", json=doctor_data)
@@ -99,7 +100,7 @@ class TestDoctorRegistration:
             "password": "password123",
             "name": "张医生",
             "gender": "MALE",
-            "phone": "12345678901"  # 无效手机号
+            "phone": "12345678901",  # 无效手机号
         }
 
         response = await client.post("/api/v1/doctor/register", json=doctor_data)
@@ -113,7 +114,7 @@ class TestDoctorRegistration:
             "password": "12345",  # 少于6位
             "name": "张医生",
             "gender": "MALE",
-            "phone": "13800138000"
+            "phone": "13800138000",
         }
 
         response = await client.post("/api/v1/doctor/register", json=doctor_data)
@@ -133,15 +134,12 @@ class TestDoctorLogin:
             "password": "password123",
             "name": "张医生",
             "gender": "MALE",
-            "phone": "13800138000"
+            "phone": "13800138000",
         }
         await client.post("/api/v1/doctor/register", json=register_data)
 
         # 使用用户名登录
-        login_data = {
-            "username": "doctor_zhang",
-            "password": "password123"
-        }
+        login_data = {"username": "doctor_zhang", "password": "password123"}
         response = await client.post("/api/v1/doctor/login", json=login_data)
 
         assert response.status_code == 200
@@ -161,15 +159,12 @@ class TestDoctorLogin:
             "password": "password123",
             "name": "李医生",
             "gender": "FEMALE",
-            "phone": "13800138001"
+            "phone": "13800138001",
         }
         await client.post("/api/v1/doctor/register", json=register_data)
 
         # 使用手机号登录
-        login_data = {
-            "username": "13800138001",
-            "password": "password123"
-        }
+        login_data = {"username": "13800138001", "password": "password123"}
         response = await client.post("/api/v1/doctor/login", json=login_data)
 
         assert response.status_code == 200
@@ -190,15 +185,12 @@ class TestDoctorLogin:
             "password": "password123",
             "name": "张医生",
             "gender": "MALE",
-            "phone": "13800138000"
+            "phone": "13800138000",
         }
         await client.post("/api/v1/doctor/register", json=register_data)
 
         # 使用错误密码登录
-        login_data = {
-            "username": "doctor_zhang",
-            "password": "wrongpassword"
-        }
+        login_data = {"username": "doctor_zhang", "password": "wrongpassword"}
         response = await client.post("/api/v1/doctor/login", json=login_data)
 
         assert response.status_code == 401
@@ -213,15 +205,12 @@ class TestDoctorLogin:
             "password": "password123",
             "name": "王医生",
             "gender": "MALE",
-            "phone": "13800138002"
+            "phone": "13800138002",
         }
         await client.post("/api/v1/doctor/register", json=register_data)
 
         # 使用手机号但错误密码登录
-        login_data = {
-            "username": "13800138002",
-            "password": "wrongpassword"
-        }
+        login_data = {"username": "13800138002", "password": "wrongpassword"}
         response = await client.post("/api/v1/doctor/login", json=login_data)
 
         assert response.status_code == 401
@@ -230,10 +219,7 @@ class TestDoctorLogin:
 
     async def test_login_nonexistent_user(self, client: AsyncClient):
         """测试不存在的用户"""
-        login_data = {
-            "username": "nonexistent_user",
-            "password": "password123"
-        }
+        login_data = {"username": "nonexistent_user", "password": "password123"}
         response = await client.post("/api/v1/doctor/login", json=login_data)
 
         assert response.status_code == 401
@@ -242,10 +228,7 @@ class TestDoctorLogin:
 
     async def test_login_nonexistent_phone(self, client: AsyncClient):
         """测试不存在的手机号"""
-        login_data = {
-            "username": "13999999999",
-            "password": "password123"
-        }
+        login_data = {"username": "13999999999", "password": "password123"}
         response = await client.post("/api/v1/doctor/login", json=login_data)
 
         assert response.status_code == 401
@@ -266,14 +249,11 @@ class TestDoctorInfo:
             "gender": "MALE",
             "phone": "13800138000",
             "department": "中医科",
-            "position": "主治医师"
+            "position": "主治医师",
         }
         await client.post("/api/v1/doctor/register", json=register_data)
 
-        login_data = {
-            "username": "doctor_zhang",
-            "password": "password123"
-        }
+        login_data = {"username": "doctor_zhang", "password": "password123"}
         response = await client.post("/api/v1/doctor/login", json=login_data)
         return response.json()["data"]["access_token"]
 
@@ -282,8 +262,7 @@ class TestDoctorInfo:
         access_token = await self.register_and_login(client)
 
         response = await client.get(
-            "/api/v1/doctor/me",
-            headers={"Authorization": f"Bearer {access_token}"}
+            "/api/v1/doctor/me", headers={"Authorization": f"Bearer {access_token}"}
         )
 
         assert response.status_code == 200
@@ -302,8 +281,7 @@ class TestDoctorInfo:
     async def test_get_current_doctor_info_invalid_token(self, client: AsyncClient):
         """测试使用无效token"""
         response = await client.get(
-            "/api/v1/doctor/me",
-            headers={"Authorization": "Bearer invalid_token"}
+            "/api/v1/doctor/me", headers={"Authorization": "Bearer invalid_token"}
         )
 
         assert response.status_code == 401
@@ -315,13 +293,13 @@ class TestDoctorInfo:
         update_data = {
             "name": "张伟",
             "position": "副主任医师",
-            "bio": "擅长中医诊疗和运动康复"
+            "bio": "擅长中医诊疗和运动康复",
         }
 
         response = await client.put(
             "/api/v1/doctor/me",
             json=update_data,
-            headers={"Authorization": f"Bearer {access_token}"}
+            headers={"Authorization": f"Bearer {access_token}"},
         )
 
         assert response.status_code == 200
@@ -343,19 +321,17 @@ class TestDoctorInfo:
             "password": "password123",
             "name": "李医生",
             "gender": "FEMALE",
-            "phone": "13800138001"
+            "phone": "13800138001",
         }
         await client.post("/api/v1/doctor/register", json=register_data2)
 
         # 尝试将第一个医生的手机号改为第二个医生的
-        update_data = {
-            "phone": "13800138001"
-        }
+        update_data = {"phone": "13800138001"}
 
         response = await client.put(
             "/api/v1/doctor/me",
             json=update_data,
-            headers={"Authorization": f"Bearer {access_token1}"}
+            headers={"Authorization": f"Bearer {access_token1}"},
         )
 
         assert response.status_code == 409
@@ -375,14 +351,11 @@ class TestPasswordChange:
             "password": "password123",
             "name": "张医生",
             "gender": "MALE",
-            "phone": "13800138000"
+            "phone": "13800138000",
         }
         await client.post("/api/v1/doctor/register", json=register_data)
 
-        login_data = {
-            "username": "doctor_zhang",
-            "password": "password123"
-        }
+        login_data = {"username": "doctor_zhang", "password": "password123"}
         response = await client.post("/api/v1/doctor/login", json=login_data)
         return response.json()["data"]["access_token"]
 
@@ -392,13 +365,13 @@ class TestPasswordChange:
 
         password_data = {
             "old_password": "password123",
-            "new_password": "newpassword456"
+            "new_password": "newpassword456",
         }
 
         response = await client.post(
             "/api/v1/doctor/change-password",
             json=password_data,
-            headers={"Authorization": f"Bearer {access_token}"}
+            headers={"Authorization": f"Bearer {access_token}"},
         )
 
         assert response.status_code == 200
@@ -407,19 +380,15 @@ class TestPasswordChange:
         assert data["message"] == "密码修改成功"
 
         # 验证可以使用新密码登录
-        login_data = {
-            "username": "doctor_zhang",
-            "password": "newpassword456"
-        }
+        login_data = {"username": "doctor_zhang", "password": "newpassword456"}
         login_response = await client.post("/api/v1/doctor/login", json=login_data)
         assert login_response.status_code == 200
 
         # 验证旧密码不能使用
-        old_login_data = {
-            "username": "doctor_zhang",
-            "password": "password123"
-        }
-        old_login_response = await client.post("/api/v1/doctor/login", json=old_login_data)
+        old_login_data = {"username": "doctor_zhang", "password": "password123"}
+        old_login_response = await client.post(
+            "/api/v1/doctor/login", json=old_login_data
+        )
         assert old_login_response.status_code == 401
 
     async def test_change_password_wrong_old_password(self, client: AsyncClient):
@@ -428,13 +397,13 @@ class TestPasswordChange:
 
         password_data = {
             "old_password": "wrongpassword",
-            "new_password": "newpassword456"
+            "new_password": "newpassword456",
         }
 
         response = await client.post(
             "/api/v1/doctor/change-password",
             json=password_data,
-            headers={"Authorization": f"Bearer {access_token}"}
+            headers={"Authorization": f"Bearer {access_token}"},
         )
 
         assert response.status_code == 400
@@ -446,12 +415,11 @@ class TestPasswordChange:
         """测试未认证修改密码"""
         password_data = {
             "old_password": "password123",
-            "new_password": "newpassword456"
+            "new_password": "newpassword456",
         }
 
         response = await client.post(
-            "/api/v1/doctor/change-password",
-            json=password_data
+            "/api/v1/doctor/change-password", json=password_data
         )
 
         assert response.status_code == 401  # Unauthorized
@@ -462,9 +430,7 @@ class TestDoctorDiagnosisIntegration:
     """医生诊断集成测试"""
 
     async def test_doctor_diagnosis_workflow(
-            self,
-            client: AsyncClient,
-            db_session: AsyncSession
+        self, client: AsyncClient, db_session: AsyncSession
     ):
         """测试完整的医生诊断工作流"""
         # 1. 注册并登录医生
@@ -473,14 +439,11 @@ class TestDoctorDiagnosisIntegration:
             "password": "password123",
             "name": "张医生",
             "gender": "MALE",
-            "phone": "13800138000"
+            "phone": "13800138000",
         }
         await client.post("/api/v1/doctor/register", json=register_data)
 
-        login_data = {
-            "username": "doctor_zhang",
-            "password": "password123"
-        }
+        login_data = {"username": "doctor_zhang", "password": "password123"}
         login_response = await client.post("/api/v1/doctor/login", json=login_data)
         access_token = login_response.json()["data"]["access_token"]
         doctor_id = login_response.json()["data"]["doctor"]["doctor_id"]
@@ -493,24 +456,22 @@ class TestDoctorDiagnosisIntegration:
                 "name": "张三",
                 "sex": "MALE",
                 "birthday": "1985-05-20",
-                "phone": "13800138001"
+                "phone": "13800138001",
             },
             "pre_diagnosis": {
                 "uuid": "660e8400-e29b-41d4-a716-446655440001",
                 "height": 175.0,
-                "weight": 80.0
-            }
+                "weight": 80.0,
+            },
         }
         record_response = await client.post(
-            "/api/v1/medical-record",
-            json=medical_record_data
+            "/api/v1/medical-record", json=medical_record_data
         )
         assert record_response.status_code == 201
 
         # 验证医生信息可以正常访问
         doctor_info_response = await client.get(
-            "/api/v1/doctor/me",
-            headers={"Authorization": f"Bearer {access_token}"}
+            "/api/v1/doctor/me", headers={"Authorization": f"Bearer {access_token}"}
         )
         assert doctor_info_response.status_code == 200
         assert doctor_info_response.json()["data"]["doctor_id"] == doctor_id

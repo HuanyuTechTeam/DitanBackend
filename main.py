@@ -1,4 +1,5 @@
 """DitanBackend 主应用入口"""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -42,7 +43,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="病人数据上传后端服务",
+    description="中医智能诊疗系统后端服务，提供医生认证、患者与就诊管理、AI 诊断和聊天会话能力。",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -69,7 +70,9 @@ async def api_exception_handler(request: Request, exc: BaseAPIException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """处理请求验证异常"""
     errors = exc.errors()
-    error_messages = [f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in errors]
+    error_messages = [
+        f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in errors
+    ]
     error_detail = "; ".join(error_messages)
 
     log_error(logger, f"请求验证失败: {error_detail}")

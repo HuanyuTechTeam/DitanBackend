@@ -9,6 +9,7 @@
 - 确保服务器已启动 (例如: uvicorn main:app --reload)
 - 设置正确的 BASE_URL 和认证信息
 """
+
 import asyncio
 import json
 from unittest.mock import Mock, patch
@@ -18,6 +19,7 @@ from httpx import AsyncClient
 
 
 # ========== Pytest 单元测试 ==========
+
 
 @pytest.mark.asyncio
 async def test_stream_diagnosis_success(client: AsyncClient, auth_headers: dict):
@@ -30,14 +32,14 @@ async def test_stream_diagnosis_success(client: AsyncClient, auth_headers: dict)
             "name": "流式诊断测试患者",
             "sex": "MALE",
             "birthday": "1985-01-01",
-            "phone": "13800138100"
+            "phone": "13800138100",
         },
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440100",
             "height": 175.0,
             "weight": 85.0,
-            "coze_conversation_log": "AI: 您好，请问您有什么不适？\nUser: 我最近感觉很疲劳。"
-        }
+            "coze_conversation_log": "AI: 您好，请问您有什么不适？\nUser: 我最近感觉很疲劳。",
+        },
     }
 
     create_response = await client.post("/api/v1/medical-record", json=record_data)
@@ -65,7 +67,7 @@ async def test_stream_diagnosis_success(client: AsyncClient, auth_headers: dict)
             yield event
             await asyncio.sleep(0.01)
 
-    with patch('app.api.patient.get_tcm_service') as mock_service:
+    with patch("app.api.patient.get_tcm_service") as mock_service:
         mock_instance = Mock()
         mock_instance.stream_complete_diagnosis = mock_stream_diagnosis
         mock_service.return_value = mock_instance
@@ -76,13 +78,16 @@ async def test_stream_diagnosis_success(client: AsyncClient, auth_headers: dict)
 
         # 发起流式请求
         async with client.stream(
-                "POST",
-                f"/api/v1/medical-record/{record_id}/ai-diagnosis/stream",
-                json=diagnosis_data,
-                headers=auth_headers
+            "POST",
+            f"/api/v1/medical-record/{record_id}/ai-diagnosis/stream",
+            json=diagnosis_data,
+            headers=auth_headers,
         ) as response:
             assert response.status_code == 200
-            assert response.headers.get("content-type") == "text/event-stream; charset=utf-8"
+            assert (
+                response.headers.get("content-type")
+                == "text/event-stream; charset=utf-8"
+            )
 
             # 收集所有事件
             events = []
@@ -107,16 +112,16 @@ async def test_stream_diagnosis_success(client: AsyncClient, auth_headers: dict)
 
 
 @pytest.mark.asyncio
-async def test_stream_diagnosis_record_not_found(client: AsyncClient, auth_headers: dict):
+async def test_stream_diagnosis_record_not_found(
+    client: AsyncClient, auth_headers: dict
+):
     """测试流式诊断 - 就诊记录不存在"""
-    diagnosis_data = {
-        "asr_text": "测试对话内容..."
-    }
+    diagnosis_data = {"asr_text": "测试对话内容..."}
 
     response = await client.post(
         "/api/v1/medical-record/99999/ai-diagnosis/stream",
         json=diagnosis_data,
-        headers=auth_headers
+        headers=auth_headers,
     )
 
     assert response.status_code == 404
@@ -125,13 +130,10 @@ async def test_stream_diagnosis_record_not_found(client: AsyncClient, auth_heade
 @pytest.mark.asyncio
 async def test_stream_diagnosis_unauthorized(client: AsyncClient):
     """测试流式诊断 - 未认证"""
-    diagnosis_data = {
-        "asr_text": "测试对话内容..."
-    }
+    diagnosis_data = {"asr_text": "测试对话内容..."}
 
     response = await client.post(
-        "/api/v1/medical-record/1/ai-diagnosis/stream",
-        json=diagnosis_data
+        "/api/v1/medical-record/1/ai-diagnosis/stream", json=diagnosis_data
     )
 
     assert response.status_code == 401
@@ -139,10 +141,11 @@ async def test_stream_diagnosis_unauthorized(client: AsyncClient):
 
 # ========== 独立脚本测试（手动测试用）==========
 
+
 async def manual_test_stream_diagnosis():
     """
     手动测试流式诊断接口
-    
+
     运行前请确保:
     1. 服务器已启动
     2. 修改下面的配置参数
@@ -175,7 +178,7 @@ async def manual_test_stream_diagnosis():
         connect=10.0,
         read=300.0,  # 读取超时设置长一些，因为LLM生成可能较慢
         write=30.0,
-        pool=10.0
+        pool=10.0,
     )
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=timeout_config) as client:
         print("=" * 60)
@@ -186,7 +189,7 @@ async def manual_test_stream_diagnosis():
         print("\n[1] 医生登录...")
         login_response = await client.post(
             "/api/v1/doctor/login",
-            json={"username": DOCTOR_USERNAME, "password": DOCTOR_PASSWORD}
+            json={"username": DOCTOR_USERNAME, "password": DOCTOR_PASSWORD},
         )
 
         if login_response.status_code != 200:
@@ -204,6 +207,7 @@ async def manual_test_stream_diagnosis():
         if record_id is None:
             print("\n[2] 创建测试就诊记录...")
             import uuid
+
             record_uuid = str(uuid.uuid4())
             pre_uuid = str(uuid.uuid4())
 
@@ -214,17 +218,19 @@ async def manual_test_stream_diagnosis():
                     "name": "流式测试患者",
                     "sex": "MALE",
                     "birthday": "1985-05-20",
-                    "phone": "13800138888"
+                    "phone": "13800138888",
                 },
                 "pre_diagnosis": {
                     "uuid": pre_uuid,
                     "height": 175.0,
                     "weight": 85.0,
-                    "coze_conversation_log": "AI: 您好，请问您有什么不适？\nUser: 我最近感觉很疲劳，体重增加了。\nAI: 睡眠质量如何？\nUser: 有时会失眠。"
-                }
+                    "coze_conversation_log": "AI: 您好，请问您有什么不适？\nUser: 我最近感觉很疲劳，体重增加了。\nAI: 睡眠质量如何？\nUser: 有时会失眠。",
+                },
             }
 
-            create_response = await client.post("/api/v1/medical-record", json=record_data)
+            create_response = await client.post(
+                "/api/v1/medical-record", json=record_data
+            )
             if create_response.status_code != 201:
                 print(f"❌ 创建就诊记录失败: {create_response.text}")
                 return
@@ -240,14 +246,13 @@ async def manual_test_stream_diagnosis():
 
         diagnosis_data = {"asr_text": ASR_TEXT}
 
-        current_stage = None
         current_content = ""
 
         async with client.stream(
-                "POST",
-                f"/api/v1/medical-record/{record_id}/ai-diagnosis/stream",
-                json=diagnosis_data,
-                headers=auth_headers
+            "POST",
+            f"/api/v1/medical-record/{record_id}/ai-diagnosis/stream",
+            json=diagnosis_data,
+            headers=auth_headers,
         ) as response:
             if response.status_code != 200:
                 print(f"❌ 请求失败: {response.status_code}")
@@ -272,7 +277,6 @@ async def manual_test_stream_diagnosis():
                                 stage_name = data.get("stage_name", "")
                                 step = data.get("step", "")
                                 print(f"\n🔄 [{step}] {stage_name} 开始...")
-                                current_stage = data.get("stage")
                                 current_content = ""
 
                             elif event_type == "content":
@@ -293,24 +297,38 @@ async def manual_test_stream_diagnosis():
                                 print("\n" + "=" * 60)
                                 print("🎉 诊断完成!")
                                 print("=" * 60)
-                                print(f"总耗时: {data.get('total_processing_time', 'N/A')}秒")
-                                print(f"\n📋 病历摘要:")
-                                print(data.get('formatted_medical_record', 'N/A')[:200] + "...")
-                                print(f"\n🔍 证型判断: {data.get('type_inference', 'N/A')}")
-                                print(f"\n💊 处方摘要:")
-                                print(data.get('prescription', 'N/A')[:200] + "...")
-                                print(f"\n🏃 运动处方摘要:")
-                                print(data.get('exercise_prescription', 'N/A')[:200] + "...")
+                                print(
+                                    f"总耗时: {data.get('total_processing_time', 'N/A')}秒"
+                                )
+                                print("\n📋 病历摘要:")
+                                print(
+                                    data.get("formatted_medical_record", "N/A")[:200]
+                                    + "..."
+                                )
+                                print(
+                                    f"\n🔍 证型判断: {data.get('type_inference', 'N/A')}"
+                                )
+                                print("\n💊 处方摘要:")
+                                print(data.get("prescription", "N/A")[:200] + "...")
+                                print("\n🏃 运动处方摘要:")
+                                print(
+                                    data.get("exercise_prescription", "N/A")[:200]
+                                    + "..."
+                                )
 
                             elif event_type == "saved":
                                 diagnosis_id = data.get("diagnosis_id")
-                                print(f"\n💾 诊断记录已保存，diagnosis_id: {diagnosis_id}")
+                                print(
+                                    f"\n💾 诊断记录已保存，diagnosis_id: {diagnosis_id}"
+                                )
 
                             elif event_type == "error":
                                 print(f"\n❌ 错误: {data.get('message', '未知错误')}")
 
                             elif event_type == "save_error":
-                                print(f"\n⚠️ 保存失败: {data.get('message', '未知错误')}")
+                                print(
+                                    f"\n⚠️ 保存失败: {data.get('message', '未知错误')}"
+                                )
 
                         except json.JSONDecodeError as e:
                             print(f"JSON解析错误: {e}")

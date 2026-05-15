@@ -3,7 +3,7 @@ import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Any, cast
+from typing import List, Dict, Any, Optional, cast
 
 from dotenv import load_dotenv
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMessageParam
@@ -12,7 +12,7 @@ from openai_chat import OpenAIChatCompletion
 from prompt_template import (
     MEDICAL_RECORD_PROMPT_TEMPLATE,
     TYPE_INFER_PROMPT_TEMPLATE,
-    PRESCRIPTION_PROMPT_TEMPLATE
+    PRESCRIPTION_PROMPT_TEMPLATE,
 )
 
 
@@ -22,16 +22,16 @@ class CLIFormatter:
 
     # 颜色定义
     COLORS = {
-        'RED': '\033[91m',
-        'GREEN': '\033[92m',
-        'YELLOW': '\033[93m',
-        'BLUE': '\033[94m',
-        'MAGENTA': '\033[95m',
-        'CYAN': '\033[96m',
-        'WHITE': '\033[97m',
-        'BOLD': '\033[1m',
-        'UNDERLINE': '\033[4m',
-        'END': '\033[0m'
+        "RED": "\033[91m",
+        "GREEN": "\033[92m",
+        "YELLOW": "\033[93m",
+        "BLUE": "\033[94m",
+        "MAGENTA": "\033[95m",
+        "CYAN": "\033[96m",
+        "WHITE": "\033[97m",
+        "BOLD": "\033[1m",
+        "UNDERLINE": "\033[4m",
+        "END": "\033[0m",
     }
 
     @classmethod
@@ -51,19 +51,21 @@ class CLIFormatter:
     def print_step(cls, step_num: int, total_steps: int, title: str):
         """打印步骤信息"""
         step_info = f"步骤 {step_num}/{total_steps}: {title}"
-        print(f"\n{cls.colored_text('▶', 'GREEN')} {cls.colored_text(step_info, 'BOLD')}")
+        print(
+            f"\n{cls.colored_text('▶', 'GREEN')} {cls.colored_text(step_info, 'BOLD')}"
+        )
 
     @classmethod
-    def print_status(cls, status: str, message: str, duration: float = None):
+    def print_status(cls, status: str, message: str, duration: Optional[float] = None):
         """打印状态信息"""
         if status == "成功":
-            icon = cls.colored_text("✓", 'GREEN')
+            icon = cls.colored_text("✓", "GREEN")
         elif status == "错误":
-            icon = cls.colored_text("✗", 'RED')
+            icon = cls.colored_text("✗", "RED")
         elif status == "进行中":
-            icon = cls.colored_text("⚡", 'YELLOW')
+            icon = cls.colored_text("⚡", "YELLOW")
         else:
-            icon = cls.colored_text("ℹ", 'BLUE')
+            icon = cls.colored_text("ℹ", "BLUE")
 
         duration_str = f" [耗时: {duration:.2f}s]" if duration else ""
         print(f"{icon} {message}{cls.colored_text(duration_str, 'MAGENTA')}")
@@ -75,7 +77,9 @@ class CLIFormatter:
         progress_bar = "█" * int(percentage // 5) + "░" * (20 - int(percentage // 5))
         print(
             f"\r{cls.colored_text(prefix, 'BLUE')}: [{cls.colored_text(progress_bar, 'GREEN')}] {current}/{total} ({percentage:.1f}%)",
-            end='', flush=True)
+            end="",
+            flush=True,
+        )
         if current == total:
             print()  # 换行
 
@@ -83,8 +87,8 @@ class CLIFormatter:
     def print_streaming_content(cls, content: str, prefix: str = ""):
         """打印流式内容"""
         if prefix:
-            print(f"{cls.colored_text(prefix, 'CYAN')}: ", end='')
-        print(content, end='', flush=True)
+            print(f"{cls.colored_text(prefix, 'CYAN')}: ", end="")
+        print(content, end="", flush=True)
 
 
 class TCMDiagnosisSystem:
@@ -93,14 +97,20 @@ class TCMDiagnosisSystem:
     整合病历生成、证型判断和处方生成的完整管道
     """
 
-    def __init__(self, api_key: str, base_url: str, model_name: str = 'deepseek-chat',
-                 max_workers: int = 5, verbose: bool = False):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        model_name: str = "deepseek-chat",
+        max_workers: int = 5,
+        verbose: bool = False,
+    ):
         """
         初始化中医诊疗系统
-        
+
         Args:
             api_key (str): OpenAI API密钥
-            base_url (str): API基础URL  
+            base_url (str): API基础URL
             model_name (str): 模型名称
             max_workers (int): 最大并发工作线程数，默认为5
             verbose (bool): 是否启用详细输出模式（流式输出）
@@ -113,7 +123,7 @@ class TCMDiagnosisSystem:
         self.verbose = verbose
         self.cli = CLIFormatter()
 
-        init_msg = f"中医诊疗系统初始化成功"
+        init_msg = "中医诊疗系统初始化成功"
         if verbose:
             init_msg += " (详细模式已启用)"
         self.cli.print_status("成功", init_msg)
@@ -121,15 +131,15 @@ class TCMDiagnosisSystem:
     def extract_answer_from_response(self, response: str) -> str:
         """
         从LLM响应中提取答案
-        
+
         Args:
             response (str): LLM的完整响应
-            
+
         Returns:
             str: 提取的答案内容
         """
         # 使用正则表达式提取<answer>标签中的内容
-        answer_pattern = r'<answer>(.*?)</answer>'
+        answer_pattern = r"<answer>(.*?)</answer>"
         match = re.search(answer_pattern, response, re.DOTALL | re.IGNORECASE)
 
         if match:
@@ -141,13 +151,15 @@ class TCMDiagnosisSystem:
                 self.cli.print_status("错误", "未找到<answer>标签，返回完整响应")
             return response.strip()
 
-    def generate_medical_record_from_transcript(self, transcript: str) -> Dict[str, Any]:
+    def generate_medical_record_from_transcript(
+        self, transcript: str
+    ) -> Dict[str, Any]:
         """
         从对话转录文本生成病历
-        
+
         Args:
             transcript (str): 对话转录文本
-            
+
         Returns:
             Dict[str, Any]: 包含病历内容和状态的字典
         """
@@ -159,21 +171,21 @@ class TCMDiagnosisSystem:
             start_time = time.time()
             if self.verbose:
                 self.cli.print_status("进行中", "正在生成病历...")
-                print(f"{self.cli.colored_text('AI输出', 'CYAN')}: ", end='')
+                print(f"{self.cli.colored_text('AI输出', 'CYAN')}: ", end="")
             else:
                 print("正在生成病历...")
 
             messages: List[ChatCompletionMessageParam] = [
-                cast(ChatCompletionUserMessageParam, {
-                    "role": "user",
-                    "content": final_prompt
-                })
+                cast(
+                    ChatCompletionUserMessageParam,
+                    {"role": "user", "content": final_prompt},
+                )
             ]
 
             medical_record = ""
             for chunk in self.llm.stream_chat(messages=messages, temperature=0.6):
                 if self.verbose:
-                    print(chunk, end='', flush=True)
+                    print(chunk, end="", flush=True)
                 medical_record += chunk
 
             end_time = time.time()
@@ -194,7 +206,7 @@ class TCMDiagnosisSystem:
                 "llm_response": medical_record,
                 "status": "success",
                 "processing_time": duration,
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
         except Exception as e:
@@ -205,16 +217,16 @@ class TCMDiagnosisSystem:
                 "medical_record": "Generation failed",
                 "status": "error",
                 "error_message": str(e),
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
     def judge_symptom_type(self, medical_record: str) -> Dict[str, Any]:
         """
         对病历进行证型判断
-        
+
         Args:
             medical_record (str): 格式化的病历文本
-            
+
         Returns:
             Dict[str, Any]: 包含证型判断结果的字典
         """
@@ -226,19 +238,19 @@ class TCMDiagnosisSystem:
             start_time = time.time()
             if self.verbose:
                 self.cli.print_status("进行中", "正在进行证型判断...")
-                print(f"{self.cli.colored_text('AI输出', 'CYAN')}: ", end='')
+                print(f"{self.cli.colored_text('AI输出', 'CYAN')}: ", end="")
 
                 # 使用流式输出
                 messages: List[ChatCompletionMessageParam] = [
-                    cast(ChatCompletionUserMessageParam, {
-                        "role": "user",
-                        "content": prompt
-                    })
+                    cast(
+                        ChatCompletionUserMessageParam,
+                        {"role": "user", "content": prompt},
+                    )
                 ]
 
                 response = ""
                 for chunk in self.llm.stream_chat(messages=messages, temperature=0.3):
-                    print(chunk, end='', flush=True)
+                    print(chunk, end="", flush=True)
                     response += chunk
                 print()  # 换行
             else:
@@ -257,11 +269,13 @@ class TCMDiagnosisSystem:
                 "llm_response": response,
                 "status": "success",
                 "processing_time": duration,
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
             if self.verbose:
-                self.cli.print_status("成功", f"证型判断完成: {diagnosis_result}", duration)
+                self.cli.print_status(
+                    "成功", f"证型判断完成: {diagnosis_result}", duration
+                )
             else:
                 print(f"证型判断完成 [耗时: {duration}s]: {diagnosis_result}")
 
@@ -275,44 +289,45 @@ class TCMDiagnosisSystem:
                 "diagnosis": "Diagnosis failed",
                 "status": "error",
                 "error_message": str(e),
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
-    def generate_prescription(self, medical_record: str, diagnosis_result: str) -> Dict[str, Any]:
+    def generate_prescription(
+        self, medical_record: str, diagnosis_result: str
+    ) -> Dict[str, Any]:
         """
         根据病历和证型判断结果生成处方
-        
+
         Args:
             medical_record (str): 格式化的病历文本
             diagnosis_result (str): 证型判断结果
-            
+
         Returns:
             Dict[str, Any]: 包含处方结果的字典
         """
         try:
             # 使用模板格式化提示词
             prompt = PRESCRIPTION_PROMPT_TEMPLATE.format(
-                medical_record=medical_record,
-                diagnosis_result=diagnosis_result
+                medical_record=medical_record, diagnosis_result=diagnosis_result
             )
 
             # 调用LLM生成处方
             start_time = time.time()
             if self.verbose:
                 self.cli.print_status("进行中", "正在生成处方...")
-                print(f"{self.cli.colored_text('AI输出', 'CYAN')}: ", end='')
+                print(f"{self.cli.colored_text('AI输出', 'CYAN')}: ", end="")
 
                 # 使用流式输出
                 messages: List[ChatCompletionMessageParam] = [
-                    cast(ChatCompletionUserMessageParam, {
-                        "role": "user",
-                        "content": prompt
-                    })
+                    cast(
+                        ChatCompletionUserMessageParam,
+                        {"role": "user", "content": prompt},
+                    )
                 ]
 
                 response = ""
                 for chunk in self.llm.stream_chat(messages=messages, temperature=0.3):
-                    print(chunk, end='', flush=True)
+                    print(chunk, end="", flush=True)
                     response += chunk
                 print()  # 换行
             else:
@@ -332,7 +347,7 @@ class TCMDiagnosisSystem:
                 "llm_response": response,
                 "status": "success",
                 "processing_time": duration,
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
             if self.verbose:
@@ -351,16 +366,16 @@ class TCMDiagnosisSystem:
                 "prescription": "Prescription generation failed",
                 "status": "error",
                 "error_message": str(e),
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
     def process_single_transcript(self, transcript: str) -> Dict[str, Any]:
         """
         处理单个转录文本的完整管道
-        
+
         Args:
             transcript (str): 对话转录文本
-            
+
         Returns:
             Dict[str, Any]: 包含完整处理结果的字典
         """
@@ -376,10 +391,16 @@ class TCMDiagnosisSystem:
             return {
                 "input_transcript": transcript,
                 "medical_record_result": medical_result,
-                "diagnosis_result": {"status": "skipped", "reason": "medical_record_generation_failed"},
-                "prescription_result": {"status": "skipped", "reason": "medical_record_generation_failed"},
+                "diagnosis_result": {
+                    "status": "skipped",
+                    "reason": "medical_record_generation_failed",
+                },
+                "prescription_result": {
+                    "status": "skipped",
+                    "reason": "medical_record_generation_failed",
+                },
                 "overall_status": "failed",
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
         medical_record = medical_result["medical_record"]
@@ -393,9 +414,12 @@ class TCMDiagnosisSystem:
                 "input_transcript": transcript,
                 "medical_record_result": medical_result,
                 "diagnosis_result": diagnosis_result,
-                "prescription_result": {"status": "skipped", "reason": "diagnosis_failed"},
+                "prescription_result": {
+                    "status": "skipped",
+                    "reason": "diagnosis_failed",
+                },
                 "overall_status": "failed",
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }
 
         diagnosis = diagnosis_result["diagnosis"]
@@ -413,13 +437,15 @@ class TCMDiagnosisSystem:
             "medical_record_result": medical_result,
             "diagnosis_result": diagnosis_result,
             "prescription_result": prescription_result,
-            "overall_status": "success" if prescription_result["status"] == "success" else "failed",
+            "overall_status": "success"
+            if prescription_result["status"] == "success"
+            else "failed",
             "total_processing_time": total_duration,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
         # 显示完成状态
-        if overall_result['overall_status'] == "success":
+        if overall_result["overall_status"] == "success":
             self.cli.print_status("成功", "所有步骤处理完成")
         else:
             self.cli.print_status("错误", "处理过程中出现错误")
@@ -428,14 +454,16 @@ class TCMDiagnosisSystem:
 
         return overall_result
 
-    def process_multiple_transcripts(self, transcripts: List[str], use_concurrent: bool = True) -> List[Dict[str, Any]]:
+    def process_multiple_transcripts(
+        self, transcripts: List[str], use_concurrent: bool = True
+    ) -> List[Dict[str, Any]]:
         """
         处理多个转录文本
-        
+
         Args:
             transcripts (List[str]): 转录文本列表
             use_concurrent (bool): 是否使用并发处理
-            
+
         Returns:
             List[Dict[str, Any]]: 处理结果列表
         """
@@ -458,7 +486,7 @@ class TCMDiagnosisSystem:
 
         end_time = time.time()
         total_duration = round(end_time - start_time, 2)
-        self.cli.print_status("成功", f"所有任务处理完成", total_duration)
+        self.cli.print_status("成功", "所有任务处理完成", total_duration)
 
         return results
 
@@ -471,7 +499,9 @@ class TCMDiagnosisSystem:
 
         for i, transcript in enumerate(transcripts, 1):
             self.cli.print_progress(i - 1, total, "顺序处理进度")
-            print(f"\n{self.cli.colored_text(f'正在处理第 {i}/{total} 个转录文本', 'BOLD')}")
+            print(
+                f"\n{self.cli.colored_text(f'正在处理第 {i}/{total} 个转录文本', 'BOLD')}"
+            )
             result = self.process_single_transcript(transcript)
             results.append(result)
 
@@ -482,7 +512,6 @@ class TCMDiagnosisSystem:
         """
         并发处理转录文本
         """
-        from typing import Optional
         results: List[Optional[Dict[str, Any]]] = [None] * len(transcripts)
         completed_count = 0
         total = len(transcripts)
@@ -504,39 +533,41 @@ class TCMDiagnosisSystem:
                     results[index] = result
                     self.cli.print_progress(completed_count, total, "并发处理进度")
                 except Exception as e:
-                    self.cli.print_status("错误", f"并发任务执行失败 (索引: {index + 1}): {str(e)}")
+                    self.cli.print_status(
+                        "错误", f"并发任务执行失败 (索引: {index + 1}): {str(e)}"
+                    )
                     error_result = {
                         "input_transcript": transcripts[index],
                         "error_message": str(e),
                         "overall_status": "error",
-                        "timestamp": time.time()
+                        "timestamp": time.time(),
                     }
                     results[index] = error_result
 
         # 确保所有位置都有值，对于None值提供默认错误结果
         final_results: List[Dict[str, Any]] = []
-        for i, result in enumerate(results):
-            if result is None:
+        for i, item in enumerate(results):
+            if item is None:
                 # 为未处理的任务提供默认错误结果
                 default_error = {
                     "input_transcript": transcripts[i],
                     "error_message": "Task not completed",
                     "overall_status": "error",
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
                 }
                 final_results.append(default_error)
             else:
-                final_results.append(result)
+                final_results.append(item)
 
         return final_results
 
     def load_transcripts_from_files(self, file_paths: List[str]) -> List[str]:
         """
         从文件列表加载转录文本
-        
+
         Args:
             file_paths (List[str]): 文件路径列表
-            
+
         Returns:
             List[str]: 转录文本列表
         """
@@ -545,7 +576,7 @@ class TCMDiagnosisSystem:
 
         for i, file_path in enumerate(file_paths, 1):
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read().strip()
                     if content:
                         transcripts.append(content)
@@ -562,7 +593,7 @@ class TCMDiagnosisSystem:
     def save_results(self, results: List[Dict[str, Any]], output_file: str):
         """
         保存处理结果到JSON文件
-        
+
         Args:
             results (List[Dict[str, Any]]): 处理结果列表
             output_file (str): 输出文件路径
@@ -571,7 +602,7 @@ class TCMDiagnosisSystem:
             # 确保输出目录存在
             os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-            with open(output_file, 'w', encoding='utf-8') as f:
+            with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
 
             self.cli.print_status("成功", f"结果已保存到: {output_file}")
@@ -582,7 +613,7 @@ class TCMDiagnosisSystem:
     def print_summary(self, results: List[Dict[str, Any]]):
         """
         打印处理结果摘要
-        
+
         Args:
             results (List[Dict[str, Any]]): 处理结果列表
         """
@@ -608,23 +639,33 @@ class TCMDiagnosisSystem:
                 if r.get("diagnosis_result", {}).get("processing_time"):
                     diagnosis_times.append(r["diagnosis_result"]["processing_time"])
                 if r.get("prescription_result", {}).get("processing_time"):
-                    prescription_times.append(r["prescription_result"]["processing_time"])
+                    prescription_times.append(
+                        r["prescription_result"]["processing_time"]
+                    )
 
             if medical_times:
                 avg_medical = round(sum(medical_times) / len(medical_times), 2)
-                print(f"{self.cli.colored_text('病历生成平均耗时', 'MAGENTA')}: {avg_medical}s")
+                print(
+                    f"{self.cli.colored_text('病历生成平均耗时', 'MAGENTA')}: {avg_medical}s"
+                )
             if diagnosis_times:
                 avg_diagnosis = round(sum(diagnosis_times) / len(diagnosis_times), 2)
-                print(f"{self.cli.colored_text('证型判断平均耗时', 'MAGENTA')}: {avg_diagnosis}s")
+                print(
+                    f"{self.cli.colored_text('证型判断平均耗时', 'MAGENTA')}: {avg_diagnosis}s"
+                )
             if prescription_times:
-                avg_prescription = round(sum(prescription_times) / len(prescription_times), 2)
-                print(f"{self.cli.colored_text('处方生成平均耗时', 'MAGENTA')}: {avg_prescription}s")
+                avg_prescription = round(
+                    sum(prescription_times) / len(prescription_times), 2
+                )
+                print(
+                    f"{self.cli.colored_text('处方生成平均耗时', 'MAGENTA')}: {avg_prescription}s"
+                )
 
 
 def load_config():
     """
     从.env文件加载配置参数
-    
+
     Returns:
         tuple: (API_KEY, BASE_URL, MODEL_NAME)
     """
@@ -632,9 +673,9 @@ def load_config():
     load_dotenv()
 
     # 从环境变量读取配置
-    api_key = os.getenv('API_KEY')
-    base_url = os.getenv('API_BASE_URL')
-    model_name = os.getenv('MODEL_NAME', 'deepseek-chat')
+    api_key = os.getenv("API_KEY")
+    base_url = os.getenv("API_BASE_URL")
+    model_name = os.getenv("MODEL_NAME", "deepseek-chat")
 
     # 检查必要的配置是否存在
     if not api_key:
@@ -670,7 +711,7 @@ def main():
         base_url=BASE_URL,
         model_name=MODEL_NAME,
         max_workers=8,
-        verbose=True  # 启用详细模式，显示流式输出
+        verbose=True,  # 启用详细模式，显示流式输出
     )
 
     # 示例1：处理单个转录文本文件
@@ -678,7 +719,7 @@ def main():
     if os.path.exists(transcript_file):
         cli.print_status("成功", f"找到转录文件: {transcript_file}")
         try:
-            with open(transcript_file, 'r', encoding='utf-8') as f:
+            with open(transcript_file, "r", encoding="utf-8") as f:
                 transcript = f.read()
 
             # 处理单个转录

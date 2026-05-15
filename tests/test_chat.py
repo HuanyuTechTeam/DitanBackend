@@ -1,7 +1,8 @@
 """
 聊天 API 测试
 """
-from unittest.mock import Mock, patch, AsyncMock
+
+from unittest.mock import Mock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -25,7 +26,7 @@ async def test_create_conversation_with_initial_context(client: AsyncClient):
     """测试带初始上下文创建会话"""
     request_data = {
         "initial_context": "患者信息：男性，35岁，体重85kg，身高175cm",
-        "system_prompt": None
+        "system_prompt": None,
     }
 
     response = await client.post("/api/v1/chat/conversation", json=request_data)
@@ -41,7 +42,7 @@ async def test_create_conversation_with_custom_system_prompt(client: AsyncClient
     """测试带自定义系统提示词创建会话"""
     request_data = {
         "system_prompt": "你是一个专业的营养顾问。",
-        "initial_context": None
+        "initial_context": None,
     }
 
     response = await client.post("/api/v1/chat/conversation", json=request_data)
@@ -90,7 +91,7 @@ async def test_chat_success(client: AsyncClient):
     session_id = create_response.json()["data"]["session_id"]
 
     # Mock AI客户端
-    with patch('app.services.chat_service.OpenAIChatCompletion') as mock_ai_class:
+    with patch("app.services.chat_service.OpenAIChatCompletion") as mock_ai_class:
         mock_ai_instance = Mock()
         mock_ai_instance.client.chat.completions.create.return_value = Mock(
             choices=[Mock(message=Mock(content="您好！我是小康，很高兴为您服务。"))]
@@ -98,10 +99,7 @@ async def test_chat_success(client: AsyncClient):
         mock_ai_class.return_value = mock_ai_instance
 
         # 发送消息
-        chat_data = {
-            "session_id": session_id,
-            "content": "你好"
-        }
+        chat_data = {"session_id": session_id, "content": "你好"}
 
         response = await client.post("/api/v1/chat/chat", json=chat_data)
 
@@ -114,10 +112,7 @@ async def test_chat_success(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_chat_session_not_found(client: AsyncClient):
     """测试向不存在的会话发送消息"""
-    chat_data = {
-        "session_id": "non-existent-session-id",
-        "content": "你好"
-    }
+    chat_data = {"session_id": "non-existent-session-id", "content": "你好"}
 
     response = await client.post("/api/v1/chat/chat", json=chat_data)
 
@@ -131,10 +126,7 @@ async def test_chat_empty_content(client: AsyncClient):
     create_response = await client.post("/api/v1/chat/conversation", json={})
     session_id = create_response.json()["data"]["session_id"]
 
-    chat_data = {
-        "session_id": session_id,
-        "content": ""
-    }
+    chat_data = {"session_id": session_id, "content": ""}
 
     response = await client.post("/api/v1/chat/chat", json=chat_data)
 
@@ -157,16 +149,13 @@ async def test_chat_stream_success(client: AsyncClient):
         yield "我是小康。"
         yield "很高兴为您服务。"
 
-    with patch('app.services.chat_service.OpenAIChatCompletion') as mock_ai_class:
+    with patch("app.services.chat_service.OpenAIChatCompletion") as mock_ai_class:
         mock_ai_instance = Mock()
         mock_ai_instance.async_stream_chat = Mock(return_value=mock_stream())
         mock_ai_class.return_value = mock_ai_instance
 
         # 发送流式消息
-        chat_data = {
-            "session_id": session_id,
-            "content": "你好"
-        }
+        chat_data = {"session_id": session_id, "content": "你好"}
 
         response = await client.post("/api/v1/chat/chat/stream", json=chat_data)
 
@@ -177,10 +166,7 @@ async def test_chat_stream_success(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_chat_stream_session_not_found(client: AsyncClient):
     """测试向不存在的会话发送流式消息"""
-    chat_data = {
-        "session_id": "non-existent-session-id",
-        "content": "你好"
-    }
+    chat_data = {"session_id": "non-existent-session-id", "content": "你好"}
 
     response = await client.post("/api/v1/chat/chat/stream", json=chat_data)
 
@@ -231,10 +217,7 @@ async def test_chat_to_closed_conversation(client: AsyncClient):
     assert close_response.status_code == 200
 
     # 尝试向已关闭的会话发送流式消息
-    chat_data = {
-        "session_id": session_id,
-        "content": "你好"
-    }
+    chat_data = {"session_id": session_id, "content": "你好"}
 
     response = await client.post("/api/v1/chat/chat/stream", json=chat_data)
 
@@ -254,7 +237,7 @@ async def test_conversation_message_history(client: AsyncClient):
     session_id = create_response.json()["data"]["session_id"]
 
     # Mock AI客户端并发送多条消息
-    with patch('app.services.chat_service.OpenAIChatCompletion') as mock_ai_class:
+    with patch("app.services.chat_service.OpenAIChatCompletion") as mock_ai_class:
         mock_ai_instance = Mock()
         mock_ai_instance.client.chat.completions.create.return_value = Mock(
             choices=[Mock(message=Mock(content="这是AI的回复。"))]
@@ -262,16 +245,16 @@ async def test_conversation_message_history(client: AsyncClient):
         mock_ai_class.return_value = mock_ai_instance
 
         # 发送第一条消息
-        await client.post("/api/v1/chat/chat", json={
-            "session_id": session_id,
-            "content": "第一条消息"
-        })
+        await client.post(
+            "/api/v1/chat/chat",
+            json={"session_id": session_id, "content": "第一条消息"},
+        )
 
         # 发送第二条消息
-        await client.post("/api/v1/chat/chat", json={
-            "session_id": session_id,
-            "content": "第二条消息"
-        })
+        await client.post(
+            "/api/v1/chat/chat",
+            json={"session_id": session_id, "content": "第二条消息"},
+        )
 
     # 获取会话历史
     response = await client.get(f"/api/v1/chat/conversation/{session_id}")
@@ -299,10 +282,7 @@ async def test_chat_content_too_long(client: AsyncClient):
     session_id = create_response.json()["data"]["session_id"]
 
     # 发送超长消息（超过10000字符）
-    chat_data = {
-        "session_id": session_id,
-        "content": "a" * 10001
-    }
+    chat_data = {"session_id": session_id, "content": "a" * 10001}
 
     response = await client.post("/api/v1/chat/chat", json=chat_data)
 
@@ -321,13 +301,13 @@ async def test_create_conversation_with_patient_id(client: AsyncClient):
             "name": "聊天测试患者",
             "sex": "MALE",
             "birthday": "1985-01-01",
-            "phone": "13800138100"
+            "phone": "13800138100",
         },
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440100",
             "height": 175.0,
-            "weight": 70.0
-        }
+            "weight": 70.0,
+        },
     }
 
     await client.post("/api/v1/medical-record", json=record_data)
@@ -335,7 +315,7 @@ async def test_create_conversation_with_patient_id(client: AsyncClient):
     # 创建关联患者的会话（patient_id=1，假设是第一个创建的患者）
     request_data = {
         "patient_id": 1,
-        "initial_context": "患者姓名：聊天测试患者，身高175cm，体重70kg"
+        "initial_context": "患者姓名：聊天测试患者，身高175cm，体重70kg",
     }
 
     response = await client.post("/api/v1/chat/conversation", json=request_data)
@@ -343,4 +323,3 @@ async def test_create_conversation_with_patient_id(client: AsyncClient):
     assert response.status_code == 201
     data = response.json()
     assert data["success"] is True
-

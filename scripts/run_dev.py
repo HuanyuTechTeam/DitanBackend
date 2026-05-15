@@ -1,6 +1,7 @@
 """
 开发环境启动脚本
 """
+
 import sys
 from pathlib import Path
 
@@ -8,8 +9,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-import uvicorn
-from app.core.config import get_settings
+import uvicorn  # noqa: E402
+from app.core.config import get_settings  # noqa: E402
 
 settings = get_settings()
 

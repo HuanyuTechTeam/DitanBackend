@@ -1,6 +1,7 @@
 """认证相关功能模块"""
+
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Optional
 
 import bcrypt
 from fastapi import Depends, HTTPException, status
@@ -36,9 +37,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """创建访问令牌"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES))
+    expire = datetime.utcnow() + (
+        expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(
+        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
 
 
 def decode_access_token(token: str) -> TokenData:
@@ -49,10 +54,12 @@ def decode_access_token(token: str) -> TokenData:
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        doctor_id: int = payload.get("doctor_id")
-        username: str = payload.get("username")
-        if doctor_id is None or username is None:
+        payload: dict[str, Any] = jwt.decode(
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
+        doctor_id = payload.get("doctor_id")
+        username = payload.get("username")
+        if not isinstance(doctor_id, int) or not isinstance(username, str):
             raise credentials_exception
         return TokenData(doctor_id=doctor_id, username=username)
     except JWTError:
@@ -72,7 +79,9 @@ async def get_current_doctor(
         )
 
     token_data = decode_access_token(credentials.credentials)
-    result = await db.execute(select(Doctor).where(Doctor.doctor_id == token_data.doctor_id))
+    result = await db.execute(
+        select(Doctor).where(Doctor.doctor_id == token_data.doctor_id)
+    )
     doctor = result.scalar_one_or_none()
 
     if doctor is None:
@@ -84,6 +93,8 @@ async def get_current_doctor(
     return doctor
 
 
-async def get_current_active_doctor(current_doctor: Doctor = Depends(get_current_doctor)) -> Doctor:
+async def get_current_active_doctor(
+    current_doctor: Doctor = Depends(get_current_doctor),
+) -> Doctor:
     """获取当前活跃的医生"""
     return current_doctor

@@ -1,4 +1,5 @@
 """聊天服务 - 处理AI对话和上下文管理"""
+
 import json
 import uuid
 from typing import Optional, List, AsyncGenerator, cast
@@ -39,9 +40,7 @@ class ChatService:
 
     def __init__(self, api_key: str, base_url: str, model_name: str):
         self.ai_client = OpenAIChatCompletion(
-            api_key=api_key,
-            base_url=base_url,
-            model_name=model_name
+            api_key=api_key, base_url=base_url, model_name=model_name
         )
         logger.info(f"ChatService初始化: model={model_name}")
 
@@ -57,7 +56,9 @@ class ChatService:
 
         final_system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         if initial_context:
-            final_system_prompt = f"{final_system_prompt}\n\n## 患者健康信息\n{initial_context}"
+            final_system_prompt = (
+                f"{final_system_prompt}\n\n## 患者健康信息\n{initial_context}"
+            )
 
         conversation = ChatConversation(
             session_id=session_id,
@@ -69,7 +70,9 @@ class ChatService:
         await db.flush()
         await db.refresh(conversation)
 
-        logger.info(f"创建会话: conversation_id={conversation.conversation_id}, session_id={session_id}")
+        logger.info(
+            f"创建会话: conversation_id={conversation.conversation_id}, session_id={session_id}"
+        )
         return conversation
 
     async def get_conversation(
@@ -79,7 +82,9 @@ class ChatService:
         load_messages: bool = True,
     ) -> Optional[ChatConversation]:
         """获取会话"""
-        query = select(ChatConversation).where(ChatConversation.session_id == session_id)
+        query = select(ChatConversation).where(
+            ChatConversation.session_id == session_id
+        )
         if load_messages:
             query = query.options(selectinload(ChatConversation.messages))
 
@@ -116,34 +121,38 @@ class ChatService:
 
         if conversation.system_prompt:
             messages.append(
-                cast(ChatCompletionSystemMessageParam, {
-                    "role": "system",
-                    "content": conversation.system_prompt
-                })
+                cast(
+                    ChatCompletionSystemMessageParam,
+                    {"role": "system", "content": conversation.system_prompt},
+                )
             )
 
-        history_messages = conversation.messages[-MAX_CONTEXT_MESSAGES:] if conversation.messages else []
+        history_messages = (
+            conversation.messages[-MAX_CONTEXT_MESSAGES:]
+            if conversation.messages
+            else []
+        )
         for msg in history_messages:
             if msg.role == MessageRole.USER:
                 messages.append(
-                    cast(ChatCompletionUserMessageParam, {
-                        "role": "user",
-                        "content": msg.content
-                    })
+                    cast(
+                        ChatCompletionUserMessageParam,
+                        {"role": "user", "content": msg.content},
+                    )
                 )
             elif msg.role == MessageRole.ASSISTANT:
                 messages.append(
-                    cast(ChatCompletionAssistantMessageParam, {
-                        "role": "assistant",
-                        "content": msg.content
-                    })
+                    cast(
+                        ChatCompletionAssistantMessageParam,
+                        {"role": "assistant", "content": msg.content},
+                    )
                 )
 
         messages.append(
-            cast(ChatCompletionUserMessageParam, {
-                "role": "user",
-                "content": user_message
-            })
+            cast(
+                ChatCompletionUserMessageParam,
+                {"role": "user", "content": user_message},
+            )
         )
 
         return messages
@@ -162,14 +171,11 @@ class ChatService:
         if not conversation.is_active:
             raise ValueError(f"会话已关闭: {session_id}")
 
-        await self.add_message(db, conversation.conversation_id, MessageRole.USER, user_message)
+        await self.add_message(
+            db, conversation.conversation_id, MessageRole.USER, user_message
+        )
 
         messages = self._build_messages(conversation, user_message)
-
-        response = self.ai_client.simple_chat(
-            user_message=user_message,
-            system_message=conversation.system_prompt,
-        )
 
         response_obj = self.ai_client.client.chat.completions.create(
             model=self.ai_client.model_name,
@@ -178,10 +184,14 @@ class ChatService:
         )
         ai_response = response_obj.choices[0].message.content or ""
 
-        await self.add_message(db, conversation.conversation_id, MessageRole.ASSISTANT, ai_response)
+        await self.add_message(
+            db, conversation.conversation_id, MessageRole.ASSISTANT, ai_response
+        )
 
         if len(conversation.messages) <= 2 and not conversation.title:
-            conversation.title = user_message[:50] + ("..." if len(user_message) > 50 else "")
+            conversation.title = user_message[:50] + (
+                "..." if len(user_message) > 50 else ""
+            )
 
         await db.commit()
         return ai_response
@@ -200,21 +210,29 @@ class ChatService:
         if not conversation.is_active:
             raise ValueError(f"会话已关闭: {session_id}")
 
-        await self.add_message(db, conversation.conversation_id, MessageRole.USER, user_message)
+        await self.add_message(
+            db, conversation.conversation_id, MessageRole.USER, user_message
+        )
         await db.commit()
 
         messages = self._build_messages(conversation, user_message)
 
         full_response = ""
         try:
-            async for chunk in self.ai_client.async_stream_chat(messages, temperature=0.7):
+            async for chunk in self.ai_client.async_stream_chat(
+                messages, temperature=0.7
+            ):
                 full_response += chunk
                 yield f"data: {json.dumps({'content': chunk}, ensure_ascii=False)}\n\n"
 
-            await self.add_message(db, conversation.conversation_id, MessageRole.ASSISTANT, full_response)
+            await self.add_message(
+                db, conversation.conversation_id, MessageRole.ASSISTANT, full_response
+            )
 
             if len(conversation.messages) <= 2 and not conversation.title:
-                conversation.title = user_message[:50] + ("..." if len(user_message) > 50 else "")
+                conversation.title = user_message[:50] + (
+                    "..." if len(user_message) > 50 else ""
+                )
 
             await db.commit()
 
@@ -247,4 +265,3 @@ class ChatService:
     ) -> Optional[ChatConversation]:
         """获取会话历史"""
         return await self.get_conversation(db, session_id, load_messages=True)
-

@@ -1,4 +1,5 @@
 """核心模块导出"""
+
 from app.core.config import Settings, get_settings
 from app.core.database import Base, get_db, init_db, close_db
 from app.core.exceptions import (
@@ -11,7 +12,15 @@ from app.core.exceptions import (
     DatabaseException,
     ServiceException,
 )
-from app.core.logging import LoggerSetup, get_logger, log_request, log_response, log_error
+from app.core.logging import (
+    LoggerSetup,
+    get_logger,
+    get_structured_logger,
+    StructuredLogger,
+    log_request,
+    log_response,
+    log_error,
+)
 from app.core.auth import (
     hash_password,
     verify_password,
@@ -38,6 +47,8 @@ __all__ = [
     "ServiceException",
     "LoggerSetup",
     "get_logger",
+    "get_structured_logger",
+    "StructuredLogger",
     "log_request",
     "log_response",
     "log_error",

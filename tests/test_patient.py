@@ -1,6 +1,7 @@
 """
 病人和诊断相关 API 测试
 """
+
 from unittest.mock import Mock, patch
 
 import pytest
@@ -19,20 +20,22 @@ async def test_query_patient_success(client: AsyncClient, auth_headers: dict):
             "name": "张三",
             "sex": "MALE",
             "birthday": "1985-05-20",
-            "phone": "13800138001"
+            "phone": "13800138001",
         },
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440001",
             "height": 175.0,
-            "weight": 70.0
-        }
+            "weight": 70.0,
+        },
     }
 
     create_response = await client.post("/api/v1/medical-record", json=record_data)
     assert create_response.status_code == 201
 
     # 查询患者 - 需要认证
-    response = await client.get("/api/v1/patient/query?phone=13800138001", headers=auth_headers)
+    response = await client.get(
+        "/api/v1/patient/query?phone=13800138001", headers=auth_headers
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -46,7 +49,9 @@ async def test_query_patient_success(client: AsyncClient, auth_headers: dict):
 @pytest.mark.asyncio
 async def test_query_patient_not_found(client: AsyncClient, auth_headers: dict):
     """测试查询不存在的患者"""
-    response = await client.get("/api/v1/patient/query?phone=13800138999", headers=auth_headers)
+    response = await client.get(
+        "/api/v1/patient/query?phone=13800138999", headers=auth_headers
+    )
 
     assert response.status_code == 404
     data = response.json()
@@ -73,7 +78,7 @@ async def test_create_medical_record_new_patient(client: AsyncClient):
             "name": "新患者",
             "sex": "MALE",
             "birthday": "1985-01-01",
-            "phone": "13800138010"
+            "phone": "13800138010",
         },
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440010",
@@ -84,9 +89,9 @@ async def test_create_medical_record_new_patient(client: AsyncClient):
                 "face": "面色略黄",
                 "tongue_front": "舌苔薄白",
                 "tongue_bottom": "舌下正常",
-                "pulse": "脉象沉细"
-            }
-        }
+                "pulse": "脉象沉细",
+            },
+        },
     }
 
     response = await client.post("/api/v1/medical-record", json=record_data)
@@ -109,13 +114,13 @@ async def test_create_medical_record_existing_patient(client: AsyncClient):
             "name": "老患者",
             "sex": "FEMALE",
             "birthday": "1990-01-01",
-            "phone": "13800138011"
+            "phone": "13800138011",
         },
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440011",
             "height": 160.0,
-            "weight": 55.0
-        }
+            "weight": 55.0,
+        },
     }
 
     first_response = await client.post("/api/v1/medical-record", json=first_record_data)
@@ -128,8 +133,8 @@ async def test_create_medical_record_existing_patient(client: AsyncClient):
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440012",
             "height": 160.0,
-            "weight": 54.0
-        }
+            "weight": 54.0,
+        },
     }
 
     response = await client.post("/api/v1/medical-record", json=second_record_data)
@@ -151,13 +156,13 @@ async def test_create_medical_record_duplicate_uuid(client: AsyncClient):
             "name": "测试患者",
             "sex": "MALE",
             "birthday": "1985-01-01",
-            "phone": "13800138012"
+            "phone": "13800138012",
         },
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440013",
             "height": 170.0,
-            "weight": 70.0
-        }
+            "weight": 70.0,
+        },
     }
 
     # 第一次创建
@@ -184,13 +189,13 @@ async def test_get_medical_record_success(client: AsyncClient, auth_headers: dic
             "name": "查询测试",
             "sex": "MALE",
             "birthday": "1985-01-01",
-            "phone": "13800138013"
+            "phone": "13800138013",
         },
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440014",
             "height": 175.0,
-            "weight": 80.0
-        }
+            "weight": 80.0,
+        },
     }
 
     create_response = await client.post("/api/v1/medical-record", json=record_data)
@@ -198,7 +203,9 @@ async def test_get_medical_record_success(client: AsyncClient, auth_headers: dic
     record_id = create_response.json()["data"]["record_id"]
 
     # 查询就诊记录 - 需要认证
-    response = await client.get(f"/api/v1/medical-record/{record_id}", headers=auth_headers)
+    response = await client.get(
+        f"/api/v1/medical-record/{record_id}", headers=auth_headers
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -238,13 +245,13 @@ async def test_create_ai_diagnosis_success(client: AsyncClient, auth_headers: di
             "name": "AI诊断测试",
             "sex": "MALE",
             "birthday": "1985-01-01",
-            "phone": "13800138014"
+            "phone": "13800138014",
         },
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440015",
             "height": 175.0,
-            "weight": 85.0
-        }
+            "weight": 85.0,
+        },
     }
 
     create_response = await client.post("/api/v1/medical-record", json=record_data)
@@ -259,18 +266,16 @@ async def test_create_ai_diagnosis_success(client: AsyncClient, auth_headers: di
         },
         "diagnosis_result": {
             "diagnosis": "脾虚湿困型",
-            "diagnosis_explanation": "患者肢体困重，懒言少动..."
+            "diagnosis_explanation": "患者肢体困重，懒言少动...",
         },
-        "prescription_result": {
-            "prescription": "党参 10g\n麸炒白术 15g\n茯苓 15g..."
-        },
+        "prescription_result": {"prescription": "党参 10g\n麸炒白术 15g\n茯苓 15g..."},
         "exercise_prescription_result": {
             "exercise_prescription": "第一周：快走30分钟，每周5次..."
         },
-        "total_processing_time": 10.5
+        "total_processing_time": 10.5,
     }
 
-    with patch('app.api.patient.get_tcm_service') as mock_service:
+    with patch("app.api.patient.get_tcm_service") as mock_service:
         mock_instance = Mock()
         mock_instance.process_complete_diagnosis.return_value = mock_diagnosis_result
         mock_service.return_value = mock_instance
@@ -283,7 +288,7 @@ async def test_create_ai_diagnosis_success(client: AsyncClient, auth_headers: di
         response = await client.post(
             f"/api/v1/medical-record/{record_id}/ai-diagnosis",
             json=diagnosis_data,
-            headers=auth_headers
+            headers=auth_headers,
         )
 
         assert response.status_code == 201
@@ -295,7 +300,9 @@ async def test_create_ai_diagnosis_success(client: AsyncClient, auth_headers: di
 
 
 @pytest.mark.asyncio
-async def test_create_ai_diagnosis_with_coze_conversation_log(client: AsyncClient, auth_headers: dict):
+async def test_create_ai_diagnosis_with_coze_conversation_log(
+    client: AsyncClient, auth_headers: dict
+):
     """测试带有coze_conversation_log的AI诊断生成"""
     # 创建包含coze_conversation_log的就诊记录
     coze_log = """AI: 您好，我是您的健康顾问。请问您今天感觉怎么样？
@@ -312,14 +319,14 @@ User: 睡眠还行，但有时会失眠。"""
             "name": "测试患者coze对话",
             "sex": "FEMALE",
             "birthday": "1990-06-15",
-            "phone": "13800138015"
+            "phone": "13800138015",
         },
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440016",
             "height": 165.0,
             "weight": 68.0,
-            "coze_conversation_log": coze_log
-        }
+            "coze_conversation_log": coze_log,
+        },
     }
 
     create_response = await client.post("/api/v1/medical-record", json=record_data)
@@ -334,18 +341,16 @@ User: 睡眠还行，但有时会失眠。"""
         },
         "diagnosis_result": {
             "diagnosis": "脾虚湿困型",
-            "diagnosis_explanation": "根据预问诊和医患对话，患者疲劳、腹胀、体重增加..."
+            "diagnosis_explanation": "根据预问诊和医患对话，患者疲劳、腹胀、体重增加...",
         },
-        "prescription_result": {
-            "prescription": "党参 10g\n麸炒白术 15g\n茯苓 15g..."
-        },
+        "prescription_result": {"prescription": "党参 10g\n麸炒白术 15g\n茯苓 15g..."},
         "exercise_prescription_result": {
             "exercise_prescription": "第一周：快走30分钟，每周5次..."
         },
-        "total_processing_time": 12.3
+        "total_processing_time": 12.3,
     }
 
-    with patch('app.api.patient.get_tcm_service') as mock_service:
+    with patch("app.api.patient.get_tcm_service") as mock_service:
         mock_instance = Mock()
         mock_instance.process_complete_diagnosis.return_value = mock_diagnosis_result
         mock_service.return_value = mock_instance
@@ -358,7 +363,7 @@ User: 睡眠还行，但有时会失眠。"""
         response = await client.post(
             f"/api/v1/medical-record/{record_id}/ai-diagnosis",
             json=diagnosis_data,
-            headers=auth_headers
+            headers=auth_headers,
         )
 
         assert response.status_code == 201
@@ -376,11 +381,16 @@ User: 睡眠还行，但有时会失眠。"""
         assert call_args.kwargs["coze_conversation_log"] == coze_log
         assert call_args.kwargs["height"] == 165.0
         assert call_args.kwargs["weight"] == 68.0
-        assert "疲劳" in call_args.kwargs["transcript"] or "肢体有些困重" in call_args.kwargs["transcript"]
+        assert (
+            "疲劳" in call_args.kwargs["transcript"]
+            or "肢体有些困重" in call_args.kwargs["transcript"]
+        )
 
 
 @pytest.mark.asyncio
-async def test_create_ai_diagnosis_without_coze_log(client: AsyncClient, auth_headers: dict):
+async def test_create_ai_diagnosis_without_coze_log(
+    client: AsyncClient, auth_headers: dict
+):
     """测试没有coze_conversation_log时的AI诊断生成"""
     # 创建不包含coze_conversation_log的就诊记录
     record_data = {
@@ -390,14 +400,14 @@ async def test_create_ai_diagnosis_without_coze_log(client: AsyncClient, auth_he
             "name": "无coze对话测试",
             "sex": "MALE",
             "birthday": "1988-03-20",
-            "phone": "13800138016"
+            "phone": "13800138016",
         },
         "pre_diagnosis": {
             "uuid": "660e8400-e29b-41d4-a716-446655440017",
             "height": 178.0,
-            "weight": 90.0
+            "weight": 90.0,
             # 注意：没有coze_conversation_log字段
-        }
+        },
     }
 
     create_response = await client.post("/api/v1/medical-record", json=record_data)
@@ -412,18 +422,16 @@ async def test_create_ai_diagnosis_without_coze_log(client: AsyncClient, auth_he
         },
         "diagnosis_result": {
             "diagnosis": "胃热燔脾型",
-            "diagnosis_explanation": "患者食欲旺盛，体重超标..."
+            "diagnosis_explanation": "患者食欲旺盛，体重超标...",
         },
-        "prescription_result": {
-            "prescription": "北柴胡 10g\n牡丹皮 10g\n知母 10g..."
-        },
+        "prescription_result": {"prescription": "北柴胡 10g\n牡丹皮 10g\n知母 10g..."},
         "exercise_prescription_result": {
             "exercise_prescription": "第一周：慢跑20分钟，每周4次..."
         },
-        "total_processing_time": 9.8
+        "total_processing_time": 9.8,
     }
 
-    with patch('app.api.patient.get_tcm_service') as mock_service:
+    with patch("app.api.patient.get_tcm_service") as mock_service:
         mock_instance = Mock()
         mock_instance.process_complete_diagnosis.return_value = mock_diagnosis_result
         mock_service.return_value = mock_instance
@@ -436,7 +444,7 @@ async def test_create_ai_diagnosis_without_coze_log(client: AsyncClient, auth_he
         response = await client.post(
             f"/api/v1/medical-record/{record_id}/ai-diagnosis",
             json=diagnosis_data,
-            headers=auth_headers
+            headers=auth_headers,
         )
 
         assert response.status_code == 201
@@ -454,16 +462,16 @@ async def test_create_ai_diagnosis_without_coze_log(client: AsyncClient, auth_he
 
 
 @pytest.mark.asyncio
-async def test_create_ai_diagnosis_record_not_found(client: AsyncClient, auth_headers: dict):
+async def test_create_ai_diagnosis_record_not_found(
+    client: AsyncClient, auth_headers: dict
+):
     """测试为不存在的就诊记录创建AI诊断"""
-    diagnosis_data = {
-        "asr_text": "测试对话内容..."
-    }
+    diagnosis_data = {"asr_text": "测试对话内容..."}
 
     response = await client.post(
         "/api/v1/medical-record/99999/ai-diagnosis",
         json=diagnosis_data,
-        headers=auth_headers
+        headers=auth_headers,
     )
 
     assert response.status_code == 404
@@ -472,13 +480,10 @@ async def test_create_ai_diagnosis_record_not_found(client: AsyncClient, auth_he
 @pytest.mark.asyncio
 async def test_create_ai_diagnosis_unauthorized(client: AsyncClient):
     """测试未认证访问AI诊断接口"""
-    diagnosis_data = {
-        "asr_text": "测试对话内容..."
-    }
+    diagnosis_data = {"asr_text": "测试对话内容..."}
 
     response = await client.post(
-        "/api/v1/medical-record/1/ai-diagnosis",
-        json=diagnosis_data
+        "/api/v1/medical-record/1/ai-diagnosis", json=diagnosis_data
     )
 
     assert response.status_code == 401

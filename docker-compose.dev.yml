@@ -37,7 +37,7 @@ services:
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:-Huanyu2020yyds!}
       DATABASE_NAME: ${DATABASE_NAME:-ditan}
       APP_NAME: ${APP_NAME:-DitanBackend-Dev}
-      APP_VERSION: ${APP_VERSION:-0.2.0-dev}
+      APP_VERSION: ${APP_VERSION:-3.0.0-dev}
       APP_DEBUG: "True"    # 开发环境建议开启 Debug
       AI_API_KEY: ${AI_API_KEY}
       AI_BASE_URL: ${AI_BASE_URL}

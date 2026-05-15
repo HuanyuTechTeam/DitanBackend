@@ -1,4 +1,5 @@
 """环境配置模块"""
+
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,7 +17,7 @@ class Settings(BaseSettings):
 
     # 应用配置
     APP_NAME: str = "DitanBackend"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "3.0.0"
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
     APP_DEBUG: bool = False
@@ -54,4 +55,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """获取配置单例"""
-    return Settings()
+    return Settings()  # type: ignore[call-arg]

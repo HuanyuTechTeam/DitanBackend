@@ -1,4 +1,5 @@
 """聊天 API 路由"""
+
 import json
 
 from fastapi import APIRouter, Depends, Path
@@ -19,7 +20,7 @@ from app.schemas.chat import (
     ChatRequest,
     ChatStreamRequest,
 )
-from app.services.chat_service import ChatService
+from app.services import ChatService
 
 router = APIRouter()
 settings = get_settings()
@@ -59,7 +60,6 @@ async def create_conversation(
             message="会话创建成功",
             data=ConversationResponse.model_validate(conversation).model_dump(),
         )
-
     except Exception as e:
         ctx.log_error("创建会话失败", e)
         raise ValidationException("创建会话失败", str(e))
@@ -107,7 +107,6 @@ async def get_conversation(
                 ],
             ).model_dump(),
         )
-
     except NotFoundException:
         raise
     except Exception as e:
@@ -137,7 +136,6 @@ async def chat(
             message="发送成功",
             data={"response": response},
         )
-
     except ValueError as e:
         raise NotFoundException(str(e))
     except Exception as e:
@@ -156,7 +154,9 @@ async def chat_stream(
     chat_service = get_chat_service()
 
     # 检查会话是否存在
-    conversation = await chat_service.get_conversation(ctx.db, data.session_id, load_messages=False)
+    conversation = await chat_service.get_conversation(
+        ctx.db, data.session_id, load_messages=False
+    )
     if not conversation:
         raise NotFoundException(f"会话不存在: {data.session_id}")
 
@@ -186,7 +186,9 @@ async def chat_stream(
     )
 
 
-@router.delete("/conversation/{session_id}", response_model=APIResponse, status_code=200)
+@router.delete(
+    "/conversation/{session_id}", response_model=APIResponse, status_code=200
+)
 async def close_conversation(
     session_id: str = Path(..., description="会话ID"),
     ctx: RequestContext = Depends(get_request_context),
@@ -207,10 +209,8 @@ async def close_conversation(
             message="会话已关闭",
             data={"session_id": session_id},
         )
-
     except NotFoundException:
         raise
     except Exception as e:
         ctx.log_error("关闭会话失败", e)
         raise ValidationException("关闭会话失败", str(e))
-
