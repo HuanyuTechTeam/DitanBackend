@@ -13,11 +13,18 @@
 
 ## 认证
 
-医生登录成功后会返回 JWT：
+受保护接口接受 Bearer token。默认 token 来自本地医生登录；开启 `APKIO_AUTH_ENABLED=True` 后，也接受 Apkio `/api/auth/login` 返回的 Org 用户 `accessToken`。
 
 ```http
 Authorization: Bearer <access_token>
 ```
+
+Apkio token 必须满足：
+
+- `aud` 为 `APKIO_ORG_TOKEN_AUDIENCE`，默认 `org`
+- 包含 `sub`、`orgId`、`email`
+- `permissions` 包含 `APKIO_REQUIRED_PERMISSION`，默认 `ditan.access`
+- `sub + orgId` 已绑定到本地 `Doctor`
 
 当前需要 JWT 的接口：
 
@@ -79,6 +86,8 @@ Authorization: Bearer <access_token>
 - `未提供认证凭证`
 - `无效的认证凭证`
 - `医生账户不存在`
+- `缺少 Ditan 访问权限`
+- `Apkio 账号未绑定医生身份`
 - `用户名/手机号或密码错误`
 
 ## 路由总览

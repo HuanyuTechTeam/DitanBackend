@@ -26,6 +26,7 @@ from app.core.auth import (
     verify_password,
     create_access_token,
     decode_access_token,
+    decode_apkio_org_token,
     get_current_doctor,
     get_current_active_doctor,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "verify_password",
     "create_access_token",
     "decode_access_token",
+    "decode_apkio_org_token",
     "get_current_doctor",
     "get_current_active_doctor",
 ]

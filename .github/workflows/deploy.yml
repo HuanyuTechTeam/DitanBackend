@@ -1,6 +1,7 @@
 name: CI/CD Pipeline (build and deploy)
 
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -11,9 +12,39 @@ env:
   IMAGE_NAME: ditan-backend
 
 jobs:
+  test:
+    name: Test and Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: Mypy
+        run: uv run mypy .
+
+      - name: Pytest
+        run: uv run pytest -q
+
   build-and-push:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name != 'pull_request'
     
     steps:
       - name: Checkout code
@@ -61,11 +92,28 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create .env file
+        env:
+          APKIO_AUTH_ENABLED: ${{ vars.APKIO_AUTH_ENABLED }}
+          APKIO_JWT_SECRET_KEY: ${{ secrets.APKIO_JWT_SECRET_KEY }}
+          APKIO_JWT_ALGORITHM: ${{ vars.APKIO_JWT_ALGORITHM }}
+          APKIO_ORG_TOKEN_AUDIENCE: ${{ vars.APKIO_ORG_TOKEN_AUDIENCE }}
+          APKIO_REQUIRED_PERMISSION: ${{ vars.APKIO_REQUIRED_PERMISSION }}
         run: |
+          APKIO_AUTH_ENABLED="${APKIO_AUTH_ENABLED:-False}"
+          APKIO_JWT_ALGORITHM="${APKIO_JWT_ALGORITHM:-HS256}"
+          APKIO_ORG_TOKEN_AUDIENCE="${APKIO_ORG_TOKEN_AUDIENCE:-org}"
+          APKIO_REQUIRED_PERMISSION="${APKIO_REQUIRED_PERMISSION:-ditan.access}"
+          if [ "$APKIO_AUTH_ENABLED" = "True" ] || [ "$APKIO_AUTH_ENABLED" = "true" ]; then
+            if [ -z "$APKIO_JWT_SECRET_KEY" ]; then
+              echo "::error::APKIO_JWT_SECRET_KEY GitHub secret is required when APKIO_AUTH_ENABLED is true"
+              exit 1
+            fi
+          fi
+
           cat > .env << EOF
           # 镜像仓库配置
           IMAGE_REGISTRY=docker.huanyufuture.top
-          IMAGE_TAG=latest
+          IMAGE_TAG=${{ github.sha }}
           
           # 数据库配置
           DATABASE_USER=${{ secrets.DATABASE_USER }}
@@ -92,6 +140,15 @@ jobs:
           
           # JWT配置
           JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+          JWT_ALGORITHM=HS256
+          JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+          # Apkio统一认证配置
+          APKIO_AUTH_ENABLED=$APKIO_AUTH_ENABLED
+          APKIO_JWT_SECRET_KEY=$APKIO_JWT_SECRET_KEY
+          APKIO_JWT_ALGORITHM=$APKIO_JWT_ALGORITHM
+          APKIO_ORG_TOKEN_AUDIENCE=$APKIO_ORG_TOKEN_AUDIENCE
+          APKIO_REQUIRED_PERMISSION=$APKIO_REQUIRED_PERMISSION
           EOF
 
       - name: Copy files to server
@@ -124,7 +181,7 @@ jobs:
             echo "✅ 登录成功"
             
             echo "⬇️  拉取最新镜像..."
-            sudo docker pull docker.huanyufuture.top/ditan-backend:latest
+            sudo docker pull docker.huanyufuture.top/ditan-backend:${{ github.sha }}
             echo "✅ 镜像拉取成功"
             
             echo "🛑 停止旧容器..."
@@ -159,32 +216,22 @@ jobs:
             $DOCKER_COMPOSE_CMD down 2>&1 || echo "⚠️ down 命令执行完成（可能没有运行中的容器）"
             echo "✅ 旧容器已处理（保留数据）"
             
-            echo "🚀 启动新容器..."
-            $DOCKER_COMPOSE_CMD up -d
-            
-            echo "⏳ 等待数据库和应用容器启动..."
-            sleep 10
+            echo "🚀 启动数据库..."
+            $DOCKER_COMPOSE_CMD up -d db
             
             echo "🔄 执行数据库迁移..."
-            # 等待应用容器完全启动
-            for i in {1..10}; do
-              if sudo docker exec ditan_backend echo "容器已就绪" 2>/dev/null; then
-                break
-              fi
-              echo "⏳ 等待应用容器就绪... ($i/10)"
-              sleep 3
-            done
-            
-            # 执行 Alembic 迁移
-            if sudo docker exec ditan_backend uv run alembic upgrade head; then
+            if $DOCKER_COMPOSE_CMD --profile tools run --rm migrate; then
               echo "✅ 数据库迁移成功"
             else
               echo "❌ 数据库迁移失败，部署中止。当前迁移状态如下:"
-              sudo docker exec ditan_backend uv run alembic current || true
-              echo "📋 应用日志:"
-              $DOCKER_COMPOSE_CMD logs --tail=80 app || true
+              $DOCKER_COMPOSE_CMD --profile tools run --rm migrate uv run alembic current || true
+              echo "📋 数据库日志:"
+              $DOCKER_COMPOSE_CMD logs --tail=80 db || true
               exit 1
             fi
+
+            echo "🚀 启动应用容器..."
+            $DOCKER_COMPOSE_CMD up -d app
             
             echo "🧹 清理未使用的镜像..."
             sudo docker image prune -af --filter "label!=keep" 2>&1 || echo "⚠️ 镜像清理遇到问题，继续执行..."

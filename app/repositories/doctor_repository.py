@@ -39,6 +39,17 @@ class DoctorRepository(BaseRepository[Doctor]):
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_apkio_identity(
+        self, apkio_org_id: str, apkio_user_id: str
+    ) -> Optional[Doctor]:
+        """根据 Apkio Org 用户身份获取医生。"""
+        stmt = select(Doctor).where(
+            Doctor.apkio_org_id == apkio_org_id,
+            Doctor.apkio_user_id == apkio_user_id,
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def check_phone_exists_for_other(
         self,
         phone: str,

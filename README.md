@@ -97,6 +97,12 @@ AI_BASE_URL=https://api.deepseek.com
 AI_MODEL_NAME=deepseek-chat
 
 JWT_SECRET_KEY=your-secret-key
+
+# 可选：接入 Apkio 统一认证
+APKIO_AUTH_ENABLED=True
+APKIO_JWT_SECRET_KEY=your-apkio-app-secret-key
+APKIO_ORG_TOKEN_AUDIENCE=org
+APKIO_REQUIRED_PERMISSION=ditan.access
 ```
 
 ### 3. 创建数据库
@@ -134,14 +140,23 @@ uv run python main.py
 
 ## 认证说明
 
-- `/api/v1/doctor/register` 和 `/api/v1/doctor/login` 无需认证
-- `/api/v1/patient/query`、`/api/v1/medical-record/{record_id}`、AI 诊断、医生诊断、就诊确认都需要医生 JWT
+- `/api/v1/doctor/register` 和 `/api/v1/doctor/login` 无需认证，作为本地医生账号的过渡入口保留
+- `/api/v1/patient/query`、`/api/v1/medical-record/{record_id}`、AI 诊断、医生诊断、就诊确认都需要认证
+- 开启 `APKIO_AUTH_ENABLED=True` 后，受保护接口同时接受 Apkio Org 用户 JWT 和原本地医生 JWT
+- Apkio token 必须包含 `aud=org`、`sub`、`orgId`、`email`，并具备 `APKIO_REQUIRED_PERMISSION` 指定的权限；`sub + orgId` 需要先绑定到本地 `Doctor`
 - `/api/v1/chat/*` 当前无需 JWT
 
 认证请求头格式：
 
 ```http
 Authorization: Bearer <access_token>
+```
+
+已有医生与 Apkio Org 用户的绑定可以通过 CSV 脚本导入：
+
+```bash
+uv run python scripts/bind_apkio_doctors.py bindings.csv --dry-run
+uv run python scripts/bind_apkio_doctors.py bindings.csv
 ```
 
 ## 核心接口

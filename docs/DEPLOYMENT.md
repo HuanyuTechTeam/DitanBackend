@@ -37,6 +37,11 @@
 | `JWT_SECRET_KEY` | 强烈建议 | JWT 密钥；代码有默认值，但生产必须覆盖 |
 | `JWT_ALGORITHM` | 否 | 默认 `HS256` |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | 否 | 默认 `1440` |
+| `APKIO_AUTH_ENABLED` | 否 | 是否接受 Apkio Org 用户 JWT，默认 `False` |
+| `APKIO_JWT_SECRET_KEY` | 开启 Apkio 时必填 | Apkio `APP_SECRET_KEY`，用于本地验签 |
+| `APKIO_JWT_ALGORITHM` | 否 | 默认 `HS256` |
+| `APKIO_ORG_TOKEN_AUDIENCE` | 否 | 默认 `org` |
+| `APKIO_REQUIRED_PERMISSION` | 否 | 默认 `ditan.access` |
 
 推荐从示例文件开始：
 
@@ -196,7 +201,7 @@ logs/app.log
 Authorization: Bearer <access_token>
 ```
 
-并且 token 只能通过 `/api/v1/doctor/login` 获取。
+默认 token 通过 `/api/v1/doctor/login` 获取。开启 `APKIO_AUTH_ENABLED=True` 后，也可以使用 Apkio `/api/auth/login` 返回的 Org 用户 `accessToken`；该账号必须具备 `APKIO_REQUIRED_PERMISSION` 权限，并且已通过 `scripts/bind_apkio_doctors.py` 绑定到本地医生。
 
 ### 需要重置 Docker 数据库
 

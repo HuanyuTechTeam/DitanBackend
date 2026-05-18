@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional, List, TYPE_CHECKING
 
-from sqlalchemy import String, Text, DateTime, Integer, Enum
+from sqlalchemy import String, Text, DateTime, Integer, Enum, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -17,6 +17,13 @@ class Doctor(Base):
     """医生用户实体"""
 
     __tablename__ = "doctors"
+    __table_args__ = (
+        UniqueConstraint(
+            "apkio_org_id",
+            "apkio_user_id",
+            name="uq_doctors_apkio_org_user",
+        ),
+    )
 
     doctor_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
@@ -33,6 +40,15 @@ class Doctor(Base):
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     position: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    apkio_org_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    apkio_user_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    apkio_email: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

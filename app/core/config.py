@@ -1,6 +1,7 @@
 """环境配置模块"""
 
 from functools import lru_cache
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -35,6 +36,13 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "your-secret-key-change-this-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+
+    # Apkio 统一认证配置
+    APKIO_AUTH_ENABLED: bool = False
+    APKIO_JWT_SECRET_KEY: Optional[str] = None
+    APKIO_JWT_ALGORITHM: str = "HS256"
+    APKIO_ORG_TOKEN_AUDIENCE: str = "org"
+    APKIO_REQUIRED_PERMISSION: str = "ditan.access"
 
     model_config = SettingsConfigDict(
         env_file=".env",

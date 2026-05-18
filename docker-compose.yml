@@ -1,3 +1,39 @@
+x-app-environment: &app_environment
+  # 数据库配置
+  DATABASE_HOST: db
+  DATABASE_PORT: 5432
+  DATABASE_USER: ${DATABASE_USER:-huanyu}
+  DATABASE_PASSWORD: ${DATABASE_PASSWORD:-Huanyu2020yyds!}
+  DATABASE_NAME: ${DATABASE_NAME:-ditan}
+
+  # 应用配置
+  APP_NAME: ${APP_NAME:-DitanBackend}
+  APP_VERSION: ${APP_VERSION:-3.0.0}
+  APP_HOST: 0.0.0.0
+  APP_PORT: 8000
+  APP_DEBUG: ${APP_DEBUG:-False}
+
+  # 日志配置
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  LOG_FILE: logs/app.log
+
+  # AI模型配置
+  AI_API_KEY: ${AI_API_KEY}
+  AI_BASE_URL: ${AI_BASE_URL}
+  AI_MODEL_NAME: ${AI_MODEL_NAME:-deepseek-chat}
+
+  # JWT
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+
+  # Apkio 统一认证
+  APKIO_AUTH_ENABLED: ${APKIO_AUTH_ENABLED:-False}
+  APKIO_JWT_SECRET_KEY: ${APKIO_JWT_SECRET_KEY:-}
+  APKIO_JWT_ALGORITHM: ${APKIO_JWT_ALGORITHM:-HS256}
+  APKIO_ORG_TOKEN_AUDIENCE: ${APKIO_ORG_TOKEN_AUDIENCE:-org}
+  APKIO_REQUIRED_PERMISSION: ${APKIO_REQUIRED_PERMISSION:-ditan.access}
+
 services:
   # PostgreSQL 数据库服务
   db:
@@ -22,6 +58,17 @@ services:
       retries: 5
       start_period: 60s
 
+  migrate:
+    image: ${IMAGE_REGISTRY:-docker.huanyufuture.top}/ditan-backend:${IMAGE_TAG:-latest}
+    profiles: ["tools"]
+    environment: *app_environment
+    command: ["uv", "run", "alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ditan_network
+
   # 应用服务
   app:
     # 生产环境：从私有镜像仓库拉取镜像
@@ -30,32 +77,7 @@ services:
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8000}:8000"
-    environment:
-      # 数据库配置
-      DATABASE_HOST: db
-      DATABASE_PORT: 5432
-      DATABASE_USER: ${DATABASE_USER:-huanyu}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-Huanyu2020yyds!}
-      DATABASE_NAME: ${DATABASE_NAME:-ditan}
-      
-      # 应用配置
-      APP_NAME: ${APP_NAME:-DitanBackend}
-      APP_VERSION: ${APP_VERSION:-3.0.0}
-      APP_HOST: 0.0.0.0
-      APP_PORT: 8000
-      APP_DEBUG: ${APP_DEBUG:-False}
-      
-      # 日志配置
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      LOG_FILE: logs/app.log
-      
-      # AI模型配置
-      AI_API_KEY: ${AI_API_KEY}
-      AI_BASE_URL: ${AI_BASE_URL}
-      AI_MODEL_NAME: ${AI_MODEL_NAME:-deepseek-chat}
-      
-      # JWT
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    environment: *app_environment
     depends_on:
       db:
         condition: service_healthy
