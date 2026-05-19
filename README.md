@@ -103,6 +103,7 @@ APKIO_AUTH_ENABLED=True
 APKIO_JWT_SECRET_KEY=your-apkio-app-secret-key
 APKIO_ORG_TOKEN_AUDIENCE=org
 APKIO_REQUIRED_PERMISSION=ditan.access
+APKIO_AUTO_CREATE_DOCTOR=True
 ```
 
 ### 3. 创建数据库
@@ -143,7 +144,8 @@ uv run python main.py
 - `/api/v1/doctor/register` 和 `/api/v1/doctor/login` 无需认证，作为本地医生账号的过渡入口保留
 - `/api/v1/patient/query`、`/api/v1/medical-record/{record_id}`、AI 诊断、医生诊断、就诊确认都需要认证
 - 开启 `APKIO_AUTH_ENABLED=True` 后，受保护接口同时接受 Apkio Org 用户 JWT 和原本地医生 JWT
-- Apkio token 必须包含 `aud=org`、`sub`、`orgId`、`email`，并具备 `APKIO_REQUIRED_PERMISSION` 指定的权限；`sub + orgId` 需要先绑定到本地 `Doctor`
+- Apkio token 必须包含 `aud=org`、`sub`、`orgId`、`email`，并具备 `APKIO_REQUIRED_PERMISSION` 指定的权限
+- `APKIO_AUTO_CREATE_DOCTOR=True` 时，首次访问会自动创建本地 `Doctor`；如果关闭该选项，则 `sub + orgId` 需要先绑定到本地 `Doctor`
 - `/api/v1/chat/*` 当前无需 JWT
 
 认证请求头格式：

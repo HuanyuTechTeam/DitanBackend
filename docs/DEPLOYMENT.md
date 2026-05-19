@@ -42,6 +42,7 @@
 | `APKIO_JWT_ALGORITHM` | 否 | 默认 `HS256` |
 | `APKIO_ORG_TOKEN_AUDIENCE` | 否 | 默认 `org` |
 | `APKIO_REQUIRED_PERMISSION` | 否 | 默认 `ditan.access` |
+| `APKIO_AUTO_CREATE_DOCTOR` | 否 | 默认 `True`；首次 Apkio 访问时自动创建本地医生业务实体 |
 
 推荐从示例文件开始：
 
@@ -201,7 +202,7 @@ logs/app.log
 Authorization: Bearer <access_token>
 ```
 
-默认 token 通过 `/api/v1/doctor/login` 获取。开启 `APKIO_AUTH_ENABLED=True` 后，也可以使用 Apkio `/api/auth/login` 返回的 Org 用户 `accessToken`；该账号必须具备 `APKIO_REQUIRED_PERMISSION` 权限，并且已通过 `scripts/bind_apkio_doctors.py` 绑定到本地医生。
+默认 token 通过 `/api/v1/doctor/login` 获取。开启 `APKIO_AUTH_ENABLED=True` 后，也可以使用 Apkio `/api/auth/login` 返回的 Org 用户 `accessToken`；该账号必须具备 `APKIO_REQUIRED_PERMISSION` 权限。`APKIO_AUTO_CREATE_DOCTOR=True` 时，未绑定的 Apkio 用户会在首次访问时自动创建本地医生业务实体；关闭该选项后，需要先通过 `scripts/bind_apkio_doctors.py` 绑定到本地医生。
 
 ### 需要重置 Docker 数据库
 

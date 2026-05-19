@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 from jose import jwt
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.core.auth as auth_module
@@ -18,7 +19,9 @@ APKIO_USER_ID = "user-00000000-0000-0000-0000-000000000001"
 APKIO_EMAIL = "doctor@apkio.test"
 
 
-def enable_apkio_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+def enable_apkio_auth(
+    monkeypatch: pytest.MonkeyPatch, *, auto_create_doctor: bool = True
+) -> None:
     test_settings = auth_module.settings.model_copy(
         update={
             "APKIO_AUTH_ENABLED": True,
@@ -26,6 +29,7 @@ def enable_apkio_auth(monkeypatch: pytest.MonkeyPatch) -> None:
             "APKIO_JWT_ALGORITHM": "HS256",
             "APKIO_ORG_TOKEN_AUDIENCE": "org",
             "APKIO_REQUIRED_PERMISSION": "ditan.access",
+            "APKIO_AUTO_CREATE_DOCTOR": auto_create_doctor,
         }
     )
     monkeypatch.setattr(auth_module, "settings", test_settings)
@@ -115,11 +119,44 @@ async def test_apkio_org_token_requires_ditan_permission(
 
 
 @pytest.mark.asyncio
-async def test_apkio_org_token_requires_doctor_binding(
+async def test_apkio_org_token_auto_creates_doctor(
     client: AsyncClient,
+    db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ):
     enable_apkio_auth(monkeypatch)
+
+    response = await client.get(
+        "/api/v1/doctor/me",
+        headers={
+            "Authorization": f"Bearer {create_apkio_token(extra_claims={'displayName': 'xsl'})}"
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["username"].startswith("apkio_")
+    assert data["name"] == "xsl"
+    assert data["gender"] == "OTHER"
+    assert data["phone"].startswith("19")
+    assert len(data["phone"]) == 11
+
+    doctor = await db_session.scalar(
+        select(Doctor).where(
+            Doctor.apkio_org_id == APKIO_ORG_ID,
+            Doctor.apkio_user_id == APKIO_USER_ID,
+        )
+    )
+    assert doctor is not None
+    assert doctor.apkio_email == APKIO_EMAIL
+
+
+@pytest.mark.asyncio
+async def test_apkio_org_token_can_disable_auto_create_doctor(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    enable_apkio_auth(monkeypatch, auto_create_doctor=False)
 
     response = await client.get(
         "/api/v1/doctor/me",

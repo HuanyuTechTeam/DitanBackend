@@ -24,7 +24,7 @@ Apkio token 必须满足：
 - `aud` 为 `APKIO_ORG_TOKEN_AUDIENCE`，默认 `org`
 - 包含 `sub`、`orgId`、`email`
 - `permissions` 包含 `APKIO_REQUIRED_PERMISSION`，默认 `ditan.access`
-- `sub + orgId` 已绑定到本地 `Doctor`
+- `sub + orgId` 已绑定到本地 `Doctor`；如果 `APKIO_AUTO_CREATE_DOCTOR=True`，首次访问会自动创建本地 `Doctor`
 
 当前需要 JWT 的接口：
 

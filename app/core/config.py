@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     APKIO_JWT_ALGORITHM: str = "HS256"
     APKIO_ORG_TOKEN_AUDIENCE: str = "org"
     APKIO_REQUIRED_PERMISSION: str = "ditan.access"
+    APKIO_AUTO_CREATE_DOCTOR: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",

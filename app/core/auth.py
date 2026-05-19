@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import hashlib
+import secrets
 from typing import Any, Optional
 
 import bcrypt
@@ -9,11 +11,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models import Doctor
+from app.models import Doctor, Gender
 from app.schemas.doctor import TokenData
 
 settings = get_settings()
@@ -27,6 +30,7 @@ class ApkioOrgTokenData:
     user_id: str
     org_id: str
     email: str
+    display_name: Optional[str]
     roles: list[str]
     permission_scopes: dict[str, str]
 
@@ -119,12 +123,15 @@ def decode_apkio_org_token(token: str) -> ApkioOrgTokenData:
     user_id = payload.get("sub")
     org_id = payload.get("orgId")
     email = payload.get("email")
+    display_name = payload.get("displayName")
     if not isinstance(user_id, str) or not user_id:
         raise _credentials_exception()
     if not isinstance(org_id, str) or not org_id:
         raise _credentials_exception()
     if not isinstance(email, str) or not email:
         raise _credentials_exception()
+    if display_name is not None and not isinstance(display_name, str):
+        display_name = None
 
     permission_scopes = _normalize_apkio_permissions(payload.get("permissions", {}))
     required_permission = settings.APKIO_REQUIRED_PERMISSION.strip()
@@ -140,9 +147,116 @@ def decode_apkio_org_token(token: str) -> ApkioOrgTokenData:
         user_id=user_id,
         org_id=org_id,
         email=email,
+        display_name=display_name,
         roles=roles,
         permission_scopes=permission_scopes,
     )
+
+
+def _apkio_doctor_name(token_data: ApkioOrgTokenData) -> str:
+    """从 Apkio 身份生成 Ditan 医生初始姓名。"""
+    name = (token_data.display_name or token_data.email.split("@", 1)[0]).strip()
+    if not name:
+        name = "Apkio医生"
+    if len(name) < 2:
+        name = f"{name}医生"
+    return name[:50]
+
+
+async def _generate_apkio_username(
+    db: AsyncSession, token_data: ApkioOrgTokenData
+) -> str:
+    """生成稳定且不冲突的 Ditan 用户名。"""
+    user_id_part = "".join(ch for ch in token_data.user_id if ch.isalnum())[:24]
+    base_username = f"apkio_{user_id_part or 'doctor'}"[:50]
+
+    for index in range(100):
+        suffix = "" if index == 0 else f"_{index}"
+        username = f"{base_username[: 50 - len(suffix)]}{suffix}"
+        existing = await db.scalar(
+            select(Doctor.doctor_id).where(Doctor.username == username)
+        )
+        if existing is None:
+            return username
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="无法生成 Apkio 医生用户名",
+    )
+
+
+async def _generate_apkio_placeholder_phone(
+    db: AsyncSession, token_data: ApkioOrgTokenData
+) -> str:
+    """生成满足现有 Doctor 非空唯一约束的占位手机号。"""
+    digest = hashlib.sha256(
+        f"{token_data.org_id}:{token_data.user_id}".encode("utf-8")
+    ).hexdigest()
+    base_number = int(digest[:12], 16) % 1_000_000_000
+
+    for offset in range(1000):
+        phone = f"19{(base_number + offset) % 1_000_000_000:09d}"
+        existing = await db.scalar(select(Doctor.doctor_id).where(Doctor.phone == phone))
+        if existing is None:
+            return phone
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="无法生成 Apkio 医生占位手机号",
+    )
+
+
+async def get_or_create_apkio_doctor(
+    db: AsyncSession, token_data: ApkioOrgTokenData
+) -> Doctor:
+    """根据 Apkio 身份获取或自动创建本地医生业务实体。"""
+    result = await db.execute(
+        select(Doctor).where(
+            Doctor.apkio_org_id == token_data.org_id,
+            Doctor.apkio_user_id == token_data.user_id,
+        )
+    )
+    doctor = result.scalar_one_or_none()
+    if doctor is not None:
+        return doctor
+
+    if not settings.APKIO_AUTO_CREATE_DOCTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apkio 账号未绑定医生身份",
+        )
+
+    doctor = Doctor(
+        username=await _generate_apkio_username(db, token_data),
+        password_hash=hash_password(secrets.token_urlsafe(32)),
+        name=_apkio_doctor_name(token_data),
+        gender=Gender.OTHER,
+        phone=await _generate_apkio_placeholder_phone(db, token_data),
+        department=None,
+        position=None,
+        bio=None,
+        apkio_org_id=token_data.org_id,
+        apkio_user_id=token_data.user_id,
+        apkio_email=token_data.email,
+    )
+    db.add(doctor)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        result = await db.execute(
+            select(Doctor).where(
+                Doctor.apkio_org_id == token_data.org_id,
+                Doctor.apkio_user_id == token_data.user_id,
+            )
+        )
+        doctor = result.scalar_one_or_none()
+        if doctor is not None:
+            return doctor
+        raise
+
+    await db.refresh(doctor)
+    return doctor
 
 
 async def get_current_doctor(
@@ -175,19 +289,7 @@ async def get_current_doctor(
 
     if settings.APKIO_AUTH_ENABLED:
         apkio_token_data = decode_apkio_org_token(token)
-        result = await db.execute(
-            select(Doctor).where(
-                Doctor.apkio_org_id == apkio_token_data.org_id,
-                Doctor.apkio_user_id == apkio_token_data.user_id,
-            )
-        )
-        doctor = result.scalar_one_or_none()
-        if doctor is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apkio 账号未绑定医生身份",
-            )
-        return doctor
+        return await get_or_create_apkio_doctor(db, apkio_token_data)
 
     raise _credentials_exception()
 
