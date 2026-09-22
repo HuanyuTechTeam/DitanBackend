@@ -10,7 +10,7 @@
 - `3b632de`：组织迁移、病例/诊断/聊天访问隔离、原子幂等上传和审计。
 - 包含本文档的提交 `test(medical): cover upload isolation and PostgreSQL migrations`：新增回归、CI PostgreSQL 服务、运行配置及交接。完整提交可用 `git log origin/main..feat/org-medical-upload --oneline` 查看。
 
-依据 Apkio `feat/org-device-auth` 分支的[开发任务](https://github.com/HuanyuTechTeam/Apkio/blob/feat/org-device-auth/docs/DITAN_ORG_MEDICAL_UPLOAD_TASK.md)与[上传协议 v1](https://github.com/HuanyuTechTeam/Apkio/blob/feat/org-device-auth/docs/MEDICAL_UPLOAD_AUTH_CONTRACT.md)。
+依据 Apkio `feat/org-device-auth` 分支的[开发任务](https://github.com/HuanyuTechTeam/Apkio/blob/distribution-provider-strategy/docs/DITAN_ORG_MEDICAL_UPLOAD_TASK.md)与[上传协议 v1](https://github.com/HuanyuTechTeam/Apkio/blob/distribution-provider-strategy/docs/MEDICAL_UPLOAD_AUTH_CONTRACT.md)。
 
 ## 已实现行为
 
@@ -93,7 +93,7 @@ PostgreSQL 数据库通过了 16 个 HTTP 检查点：成功/幂等/跨组织同
 Android、HarmonyOS 已由主会话接入专用取票/上传请求头，临床 DTO 保持原样。
 两端通过各自 mock/构建验证，但尚未安装或做真实设备、硬件密钥、BLE 及四方上传联调。
 统一分支和本地配置说明：
-https://github.com/HuanyuTechTeam/Apkio/blob/feat/org-device-auth/docs/ORG_AUTH_JOINT_DEBUG.md
+https://github.com/HuanyuTechTeam/Apkio/blob/distribution-provider-strategy/docs/ORG_AUTH_JOINT_DEBUG.md
 
 补充联调的临时服务、容器、数据库与日志已清理；复用了本机既有 PostgreSQL 镜像，没有删除已有镜像。
 
