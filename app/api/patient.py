@@ -5,7 +5,7 @@ import json
 from fastapi import APIRouter, Body, Depends, Query, Path
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import RequestContext, get_request_context, get_auth_context
+from app.api.deps import RequestContext, get_upload_context, get_auth_context
 from app.core import get_settings
 from app.core.exceptions import DatabaseException
 from app.schemas import APIResponse
@@ -33,9 +33,9 @@ async def query_patient_by_phone(
 ):
     """通过手机号查询患者信息和历史就诊记录"""
     try:
-        ctx.log_info(f"查询患者: phone={phone}")
+        ctx.log_info("查询患者")
 
-        service = PatientService(ctx.db)
+        service = PatientService(ctx.db, ctx.organization)
         result = await service.query_by_phone(phone)
 
         ctx.log_info(f"查询成功: records={len(result.medical_records)}")
@@ -54,26 +54,29 @@ async def query_patient_by_phone(
 @router.post("/medical-record", response_model=APIResponse, status_code=201)
 async def create_medical_record(
     record_data: MedicalRecordCreate,
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(get_upload_context),
 ):
-    """创建就诊记录（预就诊系统调用）"""
+    """创建就诊记录（专用上传票据）"""
+    service = MedicalRecordService(ctx.db, ctx.organization)
     try:
-        ctx.log_info(f"创建就诊记录: uuid={record_data.uuid}")
-
-        service = MedicalRecordService(ctx.db)
-        result = await service.create_medical_record(record_data)
-
-        ctx.log_info(f"创建成功: record_id={result.record_id}")
-        return APIResponse(
-            success=True,
-            message="就诊记录创建成功",
-            data=result.model_dump(),
+        result = await service.create_medical_record(
+            record_data,
+            ctx.current_upload,
+            ctx.request.state.request_id,
         )
-    except Exception as e:
-        if hasattr(e, "message"):
+        ctx.request.state.upload_result = (
+            "replayed" if service.upload_replayed else "created"
+        )
+        return APIResponse(
+            success=True, message="就诊记录创建成功", data=result.model_dump()
+        )
+    except Exception as exc:
+        if hasattr(exc, "message"):
             raise
-        ctx.log_error("创建就诊记录失败", e)
-        raise DatabaseException("创建就诊记录时发生错误", str(e))
+        # SQL exception strings may contain clinical values; never log or echo them.
+        raise DatabaseException("创建就诊记录时发生错误") from None
+    finally:
+        ctx.request.state.upload_record_id = service.upload_record_id
 
 
 @router.get("/medical-record/{record_id}", response_model=APIResponse, status_code=200)
@@ -85,7 +88,7 @@ async def get_medical_record(
     try:
         ctx.log_info(f"查询就诊记录: record_id={record_id}")
 
-        service = MedicalRecordService(ctx.db)
+        service = MedicalRecordService(ctx.db, ctx.organization)
         result = await service.get_complete_record(record_id)
 
         ctx.log_info(f"查询成功: record_id={record_id}")
@@ -115,11 +118,11 @@ async def create_ai_diagnosis(
     try:
         ctx.log_info(f"生成AI诊断: record_id={record_id}")
 
-        service = DiagnosisService(ctx.db)
+        service = DiagnosisService(ctx.db, ctx.organization)
         result = await service.create_ai_diagnosis(
             record_id,
             diagnosis_data,
-            tcm_service=get_tcm_service(),
+            tcm_service_factory=get_tcm_service,
         )
 
         ctx.log_info(f"AI诊断完成: diagnosis_id={result.diagnosis_id}")
@@ -144,7 +147,7 @@ async def create_ai_diagnosis_stream(
     """为就诊记录生成AI诊断（流式返回）"""
     ctx.log_info(f"流式AI诊断: record_id={record_id}")
 
-    service = DiagnosisService(ctx.db)
+    service = DiagnosisService(ctx.db, ctx.organization)
     medical_record, params = await service.stream_ai_diagnosis(
         record_id, diagnosis_data
     )
@@ -217,7 +220,7 @@ async def create_doctor_diagnosis(
             f"创建医生诊断: record_id={record_id}, doctor_id={doctor.doctor_id}"
         )
 
-        service = DiagnosisService(ctx.db)
+        service = DiagnosisService(ctx.db, ctx.organization)
         result = await service.create_doctor_diagnosis(
             record_id, doctor, diagnosis_data
         )
@@ -248,7 +251,7 @@ async def update_doctor_diagnosis(
         doctor = ctx.current_doctor
         ctx.log_info(f"更新医生诊断: diagnosis_id={diagnosis_id}")
 
-        service = DiagnosisService(ctx.db)
+        service = DiagnosisService(ctx.db, ctx.organization)
         result = await service.update_doctor_diagnosis(
             diagnosis_id, doctor, diagnosis_data
         )
@@ -277,7 +280,7 @@ async def get_doctor_diagnosis(
     try:
         ctx.log_info(f"查询医生诊断: diagnosis_id={diagnosis_id}")
 
-        service = DiagnosisService(ctx.db)
+        service = DiagnosisService(ctx.db, ctx.organization)
         result = await service.get_doctor_diagnosis(diagnosis_id)
 
         ctx.log_info(f"查询成功: diagnosis_id={diagnosis_id}")
@@ -305,7 +308,7 @@ async def confirm_medical_record(
         doctor = ctx.current_doctor
         ctx.log_info(f"确认就诊: record_id={record_id}, doctor_id={doctor.doctor_id}")
 
-        service = MedicalRecordService(ctx.db)
+        service = MedicalRecordService(ctx.db, ctx.organization)
         result = await service.confirm_record(record_id, doctor.name)
 
         ctx.log_info(f"就诊确认成功: record_id={record_id}")

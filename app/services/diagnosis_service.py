@@ -1,9 +1,10 @@
 """诊断业务逻辑层"""
 
-from typing import Optional, Any
+from typing import Optional, Any, Callable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_settings
+from app.core.organization import OrganizationContext
 from app.core.exceptions import (
     NotFoundException,
     ValidationException,
@@ -40,17 +41,18 @@ def get_tcm_service() -> TCMDiagnosisService:
 class DiagnosisService:
     """诊断服务类"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, organization: OrganizationContext):
         self.db = db
-        self.record_repo = MedicalRecordRepository(db)
-        self.ai_diagnosis_repo = AIDiagnosisRepository(db)
-        self.doctor_diagnosis_repo = DoctorDiagnosisRepository(db)
+        self.record_repo = MedicalRecordRepository(db, organization)
+        self.ai_diagnosis_repo = AIDiagnosisRepository(db, organization)
+        self.doctor_diagnosis_repo = DoctorDiagnosisRepository(db, organization)
 
     async def create_ai_diagnosis(
         self,
         record_id: int,
         diagnosis_data: AIDiagnosisCreate,
         tcm_service: Optional[TCMDiagnosisService] = None,
+        tcm_service_factory: Optional[Callable[[], TCMDiagnosisService]] = None,
     ) -> AIDiagnosisResponse:
         """
         生成 AI 诊断
@@ -85,7 +87,7 @@ class DiagnosisService:
                 )
 
         # 调用 TCM 服务
-        tcm_service = tcm_service or get_tcm_service()
+        tcm_service = tcm_service or (tcm_service_factory or get_tcm_service)()
         diagnosis_result = tcm_service.process_complete_diagnosis(
             transcript=diagnosis_data.asr_text,
             height=height,
@@ -185,6 +187,8 @@ class DiagnosisService:
             AIDiagnosisRecord: 保存的 AI 诊断记录
         """
         medical_record = await self.record_repo.get_by_record_id(record_id)
+        if medical_record is None:
+            raise NotFoundException()
 
         ai_diagnosis = await self.ai_diagnosis_repo.create_ai_diagnosis(
             record_id=record_id,

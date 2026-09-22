@@ -17,6 +17,8 @@ from unittest.mock import Mock, patch
 import pytest
 from httpx import AsyncClient
 
+pytestmark = pytest.mark.usefixtures("legacy_uploads")
+
 
 # ========== Pytest 单元测试 ==========
 

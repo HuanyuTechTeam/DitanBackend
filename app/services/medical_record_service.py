@@ -1,6 +1,11 @@
 """就诊记录业务逻辑层"""
 
+import hashlib
+import json
 from typing import Any
+from sqlalchemy.exc import IntegrityError
+from app.core.organization import OrganizationContext
+from app.core.upload_auth import UploadPrincipal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -31,91 +36,123 @@ from app.schemas.common import DiagnosisType as SchemaDiagnosisType
 class MedicalRecordService:
     """就诊记录服务类"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, organization: OrganizationContext):
         self.db = db
-        self.patient_repo = PatientRepository(db)
-        self.record_repo = MedicalRecordRepository(db)
-        self.pre_diagnosis_repo = PreDiagnosisRepository(db)
-        self.sanzhen_repo = SanzhenRepository(db)
-        self.ai_diagnosis_repo = AIDiagnosisRepository(db)
-        self.doctor_diagnosis_repo = DoctorDiagnosisRepository(db)
+        self.organization = organization
+        self.upload_replayed = False
+        self.upload_record_id: int | None = None
+        self.patient_repo = PatientRepository(db, organization)
+        self.record_repo = MedicalRecordRepository(db, organization)
+        self.pre_diagnosis_repo = PreDiagnosisRepository(db, organization)
+        self.sanzhen_repo = SanzhenRepository(db, organization)
+        self.ai_diagnosis_repo = AIDiagnosisRepository(db, organization)
+        self.doctor_diagnosis_repo = DoctorDiagnosisRepository(db, organization)
 
     async def create_medical_record(
         self,
         record_data: MedicalRecordCreate,
+        principal: UploadPrincipal,
+        request_id: str,
     ) -> MedicalRecordResponse:
-        """
-        创建就诊记录（预就诊系统调用）
+        """Atomic upload, with database-enforced idempotency and bounded race recovery."""
+        if principal.organization != self.organization:
+            raise NotFoundException()
+        digest = hashlib.sha256(
+            json.dumps(
+                record_data.model_dump(mode="json"),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode("utf-8")
+        ).hexdigest()
+        try:
+            for attempt in range(3):
+                existing = await self.record_repo.get_by_uuid(record_data.uuid)
+                if existing is not None:
+                    return await self._replay(existing, digest)
+                try:
+                    record = await self._insert_upload(
+                        record_data, principal, request_id, digest
+                    )
+                    # Serialize before commit so even response validation failure rolls back all rows.
+                    response = await self._upload_response(record.record_id)
+                    await self.db.commit()
+                    self.upload_record_id = response.record_id
+                    return response
+                except IntegrityError:
+                    await self.db.rollback()
+                    # The winning transaction is now visible at READ COMMITTED.
+                    existing = await self.record_repo.get_by_uuid(record_data.uuid)
+                    if existing is not None:
+                        return await self._replay(existing, digest)
+                    duplicate_pre = await self.pre_diagnosis_repo.get_by_id(
+                        record_data.pre_diagnosis.uuid, "uuid"
+                    )
+                    if duplicate_pre is not None or attempt == 2:
+                        raise DuplicateException("上传内容与已有记录冲突") from None
+        except BaseException:
+            await self.db.rollback()
+            raise
+        raise RuntimeError("Upload retry loop exhausted")
 
-        Args:
-            record_data: 就诊记录创建数据
+    async def _replay(
+        self, record: PatientMedicalRecord, digest: str
+    ) -> MedicalRecordResponse:
+        self.upload_record_id = record.record_id
+        if record.upload_digest is None or record.upload_digest != digest:
+            raise DuplicateException("相同病例 UUID 的上传内容冲突")
+        self.upload_replayed = True
+        return await self._upload_response(record.record_id)
 
-        Returns:
-            MedicalRecordResponse: 创建的就诊记录
+    async def _upload_response(self, record_id: int) -> MedicalRecordResponse:
+        record = await self.record_repo.get_by_record_id(
+            record_id,
+            load_patient=True,
+            load_pre_diagnosis=True,
+        )
+        return MedicalRecordResponse.model_validate(record)
 
-        Raises:
-            ValidationException: 患者不存在且未提供患者信息
-            DuplicateException: UUID 已存在
-        """
-        # 获取或创建患者
-        patient = await self.patient_repo.get_by_phone(record_data.patient_phone)
-
-        if not patient:
-            if not record_data.patient_info:
-                raise ValidationException(
-                    "患者不存在，请提供患者信息",
-                    f"手机号 {record_data.patient_phone} 未注册",
-                )
+    async def _insert_upload(
+        self,
+        data: MedicalRecordCreate,
+        principal: UploadPrincipal,
+        request_id: str,
+        digest: str,
+    ) -> PatientMedicalRecord:
+        patient = await self.patient_repo.get_by_phone(data.patient_phone)
+        if patient is None:
+            if data.patient_info is None:
+                raise ValidationException("患者不存在，请提供患者信息")
             patient = await self.patient_repo.create_patient(
-                name=record_data.patient_info.name,
-                sex=record_data.patient_info.sex,
-                birthday=record_data.patient_info.birthday,
-                phone=record_data.patient_info.phone,
+                name=data.patient_info.name,
+                sex=data.patient_info.sex,
+                birthday=data.patient_info.birthday,
+                phone=data.patient_phone,
             )
-
-        # 检查 UUID 是否已存在
-        existing_record = await self.record_repo.get_by_uuid(record_data.uuid)
-        if existing_record:
-            raise DuplicateException(f"就诊记录 UUID {record_data.uuid} 已存在")
-
-        # 创建就诊记录
-        medical_record = await self.record_repo.create_medical_record(
+        record = await self.record_repo.create_medical_record(
             patient_id=patient.patient_id,
-            uuid=record_data.uuid,
-            status="pending",
+            uuid=data.uuid,
         )
-
-        # 创建预诊记录
-        pre_diagnosis = await self.pre_diagnosis_repo.create_pre_diagnosis(
-            record_id=medical_record.record_id,
-            uuid=record_data.pre_diagnosis.uuid,
-            height=record_data.pre_diagnosis.height,
-            weight=record_data.pre_diagnosis.weight,
-            coze_conversation_log=record_data.pre_diagnosis.coze_conversation_log,
+        record.upload_digest = digest
+        record.upload_user_id = principal.user_id
+        record.upload_device_id = principal.device_id
+        record.upload_client_session_id = principal.client_session_id
+        record.upload_request_id = request_id
+        pre = await self.pre_diagnosis_repo.create_pre_diagnosis(
+            record_id=record.record_id,
+            uuid=data.pre_diagnosis.uuid,
+            height=data.pre_diagnosis.height,
+            weight=data.pre_diagnosis.weight,
+            coze_conversation_log=data.pre_diagnosis.coze_conversation_log,
         )
-
-        # 创建三诊分析结果
-        if record_data.pre_diagnosis.sanzhen_analysis:
-            sanzhen = record_data.pre_diagnosis.sanzhen_analysis
+        if data.pre_diagnosis.sanzhen_analysis is not None:
             await self.sanzhen_repo.create_sanzhen(
-                pre_diagnosis_id=pre_diagnosis.pre_diagnosis_id,
-                face=sanzhen.face,
-                face_image_url=sanzhen.face_image_url,
-                tongue_front=sanzhen.tongue_front,
-                tongue_front_image_url=sanzhen.tongue_front_image_url,
-                tongue_bottom=sanzhen.tongue_bottom,
-                tongue_bottom_image_url=sanzhen.tongue_bottom_image_url,
-                pulse=sanzhen.pulse,
-                diagnosis_result=sanzhen.diagnosis_result,
+                pre_diagnosis_id=pre.pre_diagnosis_id,
+                **data.pre_diagnosis.sanzhen_analysis.model_dump(),
             )
-
-        # 提交并刷新
-        await self.db.commit()
-        await self.record_repo.refresh(medical_record, ["patient", "pre_diagnosis"])
-        if medical_record.pre_diagnosis:
-            await self.db.refresh(medical_record.pre_diagnosis, ["sanzhen_result"])
-
-        return MedicalRecordResponse.model_validate(medical_record)
+        await self.db.flush()
+        return record
 
     async def get_complete_record(self, record_id: int) -> dict[str, Any]:
         """

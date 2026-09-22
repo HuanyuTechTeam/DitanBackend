@@ -3,7 +3,7 @@
 from datetime import datetime, date
 from typing import Optional, List, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.common import (
     Gender,
@@ -74,8 +74,8 @@ class PreDiagnosisCreate(BaseModel, UUIDValidatorMixin):
     """创建预诊记录请求"""
 
     uuid: str = Field(..., description="预诊记录UUID")
-    height: Optional[float] = Field(None, description="身高(cm)")
-    weight: Optional[float] = Field(None, description="体重(kg)")
+    height: Optional[float] = Field(None, allow_inf_nan=False, description="身高(cm)")
+    weight: Optional[float] = Field(None, allow_inf_nan=False, description="体重(kg)")
     coze_conversation_log: Optional[str] = Field(None, description="对话记录")
     sanzhen_analysis: Optional[SanzhenAnalysisCreate] = Field(
         None, description="三诊分析结果"
@@ -112,6 +112,15 @@ class MedicalRecordCreate(BaseModel, PhoneValidatorMixin, UUIDValidatorMixin):
         None, description="患者信息（新患者需提供）"
     )
     pre_diagnosis: PreDiagnosisCreate = Field(..., description="预诊记录")
+
+    @model_validator(mode="after")
+    def consistent_phone(self) -> "MedicalRecordCreate":
+        if (
+            self.patient_info is not None
+            and self.patient_info.phone != self.patient_phone
+        ):
+            raise ValueError("patient_phone and patient_info.phone must match")
+        return self
 
     @field_validator("uuid")
     @classmethod

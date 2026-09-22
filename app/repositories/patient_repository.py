@@ -6,18 +6,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Patient, PatientMedicalRecord
-from app.repositories.base import BaseRepository
+from app.repositories.organization import OrganizationRepository
+from app.core.organization import OrganizationContext
 
 
-class PatientRepository(BaseRepository[Patient]):
+class PatientRepository(OrganizationRepository[Patient]):
     """患者 Repository"""
 
-    def __init__(self, db: AsyncSession):
-        super().__init__(db, Patient)
+    def __init__(self, db: AsyncSession, organization: OrganizationContext):
+        super().__init__(db, Patient, organization)
 
     async def get_by_phone(self, phone: str) -> Optional[Patient]:
         """根据手机号查询患者"""
-        stmt = select(Patient).where(Patient.phone == phone)
+        stmt = self._select().where(Patient.phone == phone)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -34,6 +35,7 @@ class PatientRepository(BaseRepository[Patient]):
     ) -> Patient:
         """创建新患者"""
         patient = Patient(
+            org_id=self.organization.org_id,
             name=name,
             sex=sex,
             birthday=birthday,
@@ -48,7 +50,8 @@ class PatientRepository(BaseRepository[Patient]):
     ) -> Sequence[PatientMedicalRecord]:
         """获取患者的所有就诊记录"""
         stmt = select(PatientMedicalRecord).where(
-            PatientMedicalRecord.patient_id == patient_id
+            PatientMedicalRecord.patient_id == patient_id,
+            PatientMedicalRecord.org_id == self.organization.org_id,
         )
         if order_desc:
             stmt = stmt.order_by(PatientMedicalRecord.created_at.desc())

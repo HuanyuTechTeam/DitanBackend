@@ -4,6 +4,7 @@ from datetime import date
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.organization import OrganizationContext
 from app.core.exceptions import NotFoundException, ValidationException
 from app.models import Patient
 from app.repositories import PatientRepository, MedicalRecordRepository
@@ -17,10 +18,10 @@ from app.schemas.patient import (
 class PatientService:
     """患者服务类"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, organization: OrganizationContext):
         self.db = db
-        self.patient_repo = PatientRepository(db)
-        self.record_repo = MedicalRecordRepository(db)
+        self.patient_repo = PatientRepository(db, organization)
+        self.record_repo = MedicalRecordRepository(db, organization)
 
     async def query_by_phone(self, phone: str) -> PatientQueryResponse:
         """
@@ -37,7 +38,7 @@ class PatientService:
         """
         patient = await self.patient_repo.get_by_phone(phone)
         if not patient:
-            raise NotFoundException(f"未找到手机号为 {phone} 的患者")
+            raise NotFoundException("未找到患者")
 
         medical_records = await self.patient_repo.get_medical_records_by_patient(
             patient.patient_id
@@ -90,7 +91,7 @@ class PatientService:
         if name is None or sex is None or birthday is None:
             raise ValidationException(
                 "患者不存在，请提供患者信息",
-                f"手机号 {phone} 未注册",
+                "当前组织未注册该患者",
             )
 
         patient = await self.patient_repo.create_patient(

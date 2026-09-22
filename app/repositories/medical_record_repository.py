@@ -1,7 +1,6 @@
 """就诊记录数据访问层"""
 
 from typing import Optional
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,14 +9,15 @@ from app.models import (
     PreDiagnosisRecord,
     SanzhenAnalysisResult,
 )
-from app.repositories.base import BaseRepository
+from app.repositories.organization import OrganizationRepository
+from app.core.organization import OrganizationContext
 
 
-class MedicalRecordRepository(BaseRepository[PatientMedicalRecord]):
+class MedicalRecordRepository(OrganizationRepository[PatientMedicalRecord]):
     """就诊记录 Repository"""
 
-    def __init__(self, db: AsyncSession):
-        super().__init__(db, PatientMedicalRecord)
+    def __init__(self, db: AsyncSession, organization: OrganizationContext):
+        super().__init__(db, PatientMedicalRecord, organization)
 
     async def get_by_record_id(
         self,
@@ -27,9 +27,7 @@ class MedicalRecordRepository(BaseRepository[PatientMedicalRecord]):
         load_diagnoses: bool = False,
     ) -> Optional[PatientMedicalRecord]:
         """根据记录ID获取就诊记录（支持关联加载）"""
-        stmt = select(PatientMedicalRecord).where(
-            PatientMedicalRecord.record_id == record_id
-        )
+        stmt = self._select().where(PatientMedicalRecord.record_id == record_id)
 
         options = []
         if load_patient:
@@ -51,7 +49,7 @@ class MedicalRecordRepository(BaseRepository[PatientMedicalRecord]):
 
     async def get_by_uuid(self, uuid: str) -> Optional[PatientMedicalRecord]:
         """根据 UUID 获取就诊记录"""
-        stmt = select(PatientMedicalRecord).where(PatientMedicalRecord.uuid == uuid)
+        stmt = self._select().where(PatientMedicalRecord.uuid == uuid)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -63,6 +61,7 @@ class MedicalRecordRepository(BaseRepository[PatientMedicalRecord]):
     ) -> PatientMedicalRecord:
         """创建就诊记录"""
         record = PatientMedicalRecord(
+            org_id=self.organization.org_id,
             patient_id=patient_id,
             uuid=uuid,
             status=status,
@@ -75,16 +74,17 @@ class MedicalRecordRepository(BaseRepository[PatientMedicalRecord]):
         status: str,
     ) -> PatientMedicalRecord:
         """更新就诊记录状态"""
+        await self._authorize_entity(record)
         record.status = status
         await self.db.flush()
         return record
 
 
-class PreDiagnosisRepository(BaseRepository[PreDiagnosisRecord]):
+class PreDiagnosisRepository(OrganizationRepository[PreDiagnosisRecord]):
     """预诊记录 Repository"""
 
-    def __init__(self, db: AsyncSession):
-        super().__init__(db, PreDiagnosisRecord)
+    def __init__(self, db: AsyncSession, organization: OrganizationContext):
+        super().__init__(db, PreDiagnosisRecord, organization)
 
     async def create_pre_diagnosis(
         self,
@@ -96,6 +96,7 @@ class PreDiagnosisRepository(BaseRepository[PreDiagnosisRecord]):
     ) -> PreDiagnosisRecord:
         """创建预诊记录"""
         pre_diagnosis = PreDiagnosisRecord(
+            org_id=self.organization.org_id,
             record_id=record_id,
             uuid=uuid,
             height=height,
@@ -105,11 +106,11 @@ class PreDiagnosisRepository(BaseRepository[PreDiagnosisRecord]):
         return await self.create(pre_diagnosis)
 
 
-class SanzhenRepository(BaseRepository[SanzhenAnalysisResult]):
+class SanzhenRepository(OrganizationRepository[SanzhenAnalysisResult]):
     """三诊分析结果 Repository"""
 
-    def __init__(self, db: AsyncSession):
-        super().__init__(db, SanzhenAnalysisResult)
+    def __init__(self, db: AsyncSession, organization: OrganizationContext):
+        super().__init__(db, SanzhenAnalysisResult, organization)
 
     async def create_sanzhen(
         self,

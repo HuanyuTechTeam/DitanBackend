@@ -7,12 +7,14 @@ from unittest.mock import Mock, patch
 import pytest
 from httpx import AsyncClient
 
+pytestmark = pytest.mark.usefixtures("legacy_uploads")
+
 
 # ========== 患者查询测试 ==========
 @pytest.mark.asyncio
 async def test_query_patient_success(client: AsyncClient, auth_headers: dict):
     """测试成功查询患者信息"""
-    # 先创建就诊记录（会自动创建患者）- 此接口不需要认证
+    # 先创建就诊记录（会自动创建患者）- 显式 legacy 兼容模式
     record_data = {
         "uuid": "550e8400-e29b-41d4-a716-446655440001",
         "patient_phone": "13800138001",
@@ -171,17 +173,17 @@ async def test_create_medical_record_duplicate_uuid(client: AsyncClient):
 
     # 第二次创建（重复UUID）
     response2 = await client.post("/api/v1/medical-record", json=record_data)
-    assert response2.status_code == 409
+    assert response2.status_code == 201
     data = response2.json()
-    assert data["success"] is False
-    assert "已存在" in data["message"]
+    assert data["success"] is True
+    assert data["data"]["record_id"] == response1.json()["data"]["record_id"]
 
 
 # ========== 查询就诊记录测试 ==========
 @pytest.mark.asyncio
 async def test_get_medical_record_success(client: AsyncClient, auth_headers: dict):
     """测试成功查询就诊记录"""
-    # 先创建就诊记录 - 此接口不需要认证
+    # 先创建就诊记录 - 显式 legacy 兼容模式
     record_data = {
         "uuid": "550e8400-e29b-41d4-a716-446655440014",
         "patient_phone": "13800138013",
@@ -237,7 +239,7 @@ async def test_get_medical_record_unauthorized(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_create_ai_diagnosis_success(client: AsyncClient, auth_headers: dict):
     """测试成功创建AI诊断"""
-    # 先创建就诊记录 - 此接口不需要认证
+    # 先创建就诊记录 - 显式 legacy 兼容模式
     record_data = {
         "uuid": "550e8400-e29b-41d4-a716-446655440015",
         "patient_phone": "13800138014",

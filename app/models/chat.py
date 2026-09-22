@@ -4,7 +4,16 @@ from datetime import datetime
 from typing import Optional, List
 from enum import Enum as PyEnum
 
-from sqlalchemy import String, Text, DateTime, Integer, ForeignKey, Enum, Boolean
+from sqlalchemy import (
+    String,
+    Text,
+    DateTime,
+    Integer,
+    ForeignKey,
+    Enum,
+    Boolean,
+    ForeignKeyConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -22,6 +31,14 @@ class ChatConversation(Base):
     """聊天会话"""
 
     __tablename__ = "chat_conversations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["org_id", "patient_id"],
+            ["patients.org_id", "patients.patient_id"],
+            name="fk_chat_org_patient",
+        ),
+    )
+    org_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
 
     conversation_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
@@ -32,7 +49,7 @@ class ChatConversation(Base):
     )
     # 可选关联患者
     patient_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("patients.patient_id"), nullable=True, index=True
+        Integer, nullable=True, index=True
     )
     # 会话标题（可选，可由第一条消息生成）
     title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)

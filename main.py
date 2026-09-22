@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api import api_v1_router
+from app.core.upload_audit import MedicalUploadAuditMiddleware
 from app.core import (
     get_settings,
     init_db,
@@ -49,12 +50,27 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+app.add_middleware(MedicalUploadAuditMiddleware)
 app.include_router(api_v1_router)
 
 
 @app.exception_handler(BaseAPIException)
 async def api_exception_handler(request: Request, exc: BaseAPIException):
     """处理自定义 API 异常"""
+    if hasattr(request.state, "request_id"):
+        code = getattr(exc, "code", type(exc).__name__)
+        request.state.upload_failure_code = code
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "message": exc.message,
+                "detail": None,
+                "code": code,
+                "requestId": request.state.request_id,
+            },
+            headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
+        )
     log_error(logger, f"API 异常: {exc.message}", exc if settings.APP_DEBUG else None)
     return JSONResponse(
         status_code=exc.status_code,
@@ -69,6 +85,18 @@ async def api_exception_handler(request: Request, exc: BaseAPIException):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """处理请求验证异常"""
+    if hasattr(request.state, "request_id"):
+        request.state.upload_failure_code = "UPLOAD_VALIDATION_ERROR"
+        return JSONResponse(
+            status_code=422,
+            content={
+                "success": False,
+                "message": "请求参数验证失败",
+                "detail": None,
+                "code": "UPLOAD_VALIDATION_ERROR",
+                "requestId": request.state.request_id,
+            },
+        )
     errors = exc.errors()
     error_messages = [
         f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in errors
@@ -89,6 +117,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """处理未捕获的异常"""
+    if hasattr(request.state, "request_id"):
+        request.state.upload_failure_code = "UPLOAD_FAILED"
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "message": "服务器内部错误",
+                "detail": None,
+                "code": "UPLOAD_FAILED",
+                "requestId": request.state.request_id,
+            },
+        )
     log_error(logger, "未处理的异常", exc)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

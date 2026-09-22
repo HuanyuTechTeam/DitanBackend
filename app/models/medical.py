@@ -3,7 +3,18 @@
 from datetime import datetime, date
 from typing import Optional, List
 
-from sqlalchemy import String, Text, DateTime, Date, Float, Integer, ForeignKey, Enum
+from sqlalchemy import (
+    String,
+    Text,
+    DateTime,
+    Date,
+    Float,
+    Integer,
+    ForeignKey,
+    Enum,
+    UniqueConstraint,
+    ForeignKeyConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -14,6 +25,11 @@ class Patient(Base):
     """患者基本信息"""
 
     __tablename__ = "patients"
+    __table_args__ = (
+        UniqueConstraint("org_id", "phone", name="uq_patients_org_phone"),
+        UniqueConstraint("org_id", "patient_id", name="uq_patients_org_id"),
+    )
+    org_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
 
     patient_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
@@ -21,9 +37,7 @@ class Patient(Base):
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     sex: Mapped[Gender] = mapped_column(Enum(Gender), nullable=False)
     birthday: Mapped[date] = mapped_column(Date, nullable=False)
-    phone: Mapped[str] = mapped_column(
-        String(11), nullable=False, index=True, unique=True
-    )
+    phone: Mapped[str] = mapped_column(String(11), nullable=False, index=True)
 
     medical_records: Mapped[List["PatientMedicalRecord"]] = relationship(
         "PatientMedicalRecord", back_populates="patient", cascade="all, delete-orphan"
@@ -37,16 +51,27 @@ class PatientMedicalRecord(Base):
     """就诊记录"""
 
     __tablename__ = "patient_medical_records"
+    __table_args__ = (
+        UniqueConstraint("org_id", "uuid", name="uq_medical_records_org_uuid"),
+        UniqueConstraint("org_id", "record_id", name="uq_medical_records_org_id"),
+        ForeignKeyConstraint(
+            ["org_id", "patient_id"],
+            ["patients.org_id", "patients.patient_id"],
+            name="fk_medical_records_org_patient",
+        ),
+    )
+    org_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    upload_digest: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    upload_user_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    upload_device_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    upload_client_session_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    upload_request_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     record_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
     )
-    patient_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("patients.patient_id"), nullable=False, index=True
-    )
-    uuid: Mapped[str] = mapped_column(
-        String(36), nullable=False, unique=True, index=True
-    )
+    patient_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    uuid: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
@@ -78,20 +103,26 @@ class PreDiagnosisRecord(Base):
     """预诊记录"""
 
     __tablename__ = "pre_diagnosis_records"
+    __table_args__ = (
+        UniqueConstraint("org_id", "uuid", name="uq_pre_diagnosis_org_uuid"),
+        ForeignKeyConstraint(
+            ["org_id", "record_id"],
+            ["patient_medical_records.org_id", "patient_medical_records.record_id"],
+            name="fk_pre_diagnosis_org_record",
+        ),
+    )
+    org_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
 
     pre_diagnosis_id: Mapped[int] = mapped_column(
         Integer, primary_key=True, autoincrement=True
     )
     record_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("patient_medical_records.record_id"),
         nullable=False,
         unique=True,
         index=True,
     )
-    uuid: Mapped[str] = mapped_column(
-        String(36), nullable=False, unique=True, index=True
-    )
+    uuid: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     height: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     coze_conversation_log: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
