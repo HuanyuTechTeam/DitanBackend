@@ -8,7 +8,9 @@
 uv sync
 uv sync --extra dev
 cp .env.example .env
-uv run python scripts/run_dev.py
+# 配好数据库和 Apkio 地址后，先执行迁移
+uv run --frozen alembic upgrade head
+uv run --frozen python scripts/run_dev.py
 ```
 
 启动后访问：
@@ -51,10 +53,11 @@ Authorization: Bearer <access_token>
 
 ## 4. 创建就诊记录
 
-该接口通常由预问诊系统调用，不需要 JWT。
+该接口需要 Apkio 独立上传票据，并配置包含 `/api` 的 `APKIO_BASE_URL`。本地 loopback HTTP 需显式开启 `APKIO_ALLOW_LOOPBACK_HTTP=True`。以下上传后的医生操作需绑定到同一组织；新注册但未绑定组织的本地医生只能访问 legacy。
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/medical-record" \
+  -H "Authorization: Bearer <medicalUploadToken>" \
   -H "Content-Type: application/json" \
   -d '{
     "uuid": "550e8400-e29b-41d4-a716-446655440001",
@@ -175,12 +178,13 @@ curl -X POST "http://localhost:8000/api/v1/medical-record/1/confirm" \
 
 ## 9. 可选：创建 AI 聊天会话
 
-聊天接口当前无需 JWT。
+聊天接口需要医生 JWT，且关联患者必须与医生属于同一组织。
 
 ### 创建会话
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/chat/conversation" \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "initial_context": "患者，35岁，主诉疲劳、腹胀。"
@@ -191,6 +195,7 @@ curl -X POST "http://localhost:8000/api/v1/chat/conversation" \
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/chat/chat" \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "<session_id>",
@@ -202,6 +207,7 @@ curl -X POST "http://localhost:8000/api/v1/chat/chat" \
 
 ```bash
 curl -N -X POST "http://localhost:8000/api/v1/chat/chat/stream" \
+  -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "<session_id>",

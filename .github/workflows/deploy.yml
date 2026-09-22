@@ -15,6 +15,21 @@ jobs:
   test:
     name: Test and Lint
     runs-on: ubuntu-latest
+    env:
+      DITAN_TEST_POSTGRES_URL: postgresql+asyncpg://postgres:ditan_synthetic_test@127.0.0.1:5432/ditan_org_upload_test
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ditan_synthetic_test
+          POSTGRES_DB: ditan_org_upload_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ditan_org_upload_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout code
@@ -32,13 +47,13 @@ jobs:
         run: uv sync --extra dev --frozen
 
       - name: Ruff
-        run: uv run ruff check .
+        run: uv run --frozen ruff check .
 
       - name: Mypy
-        run: uv run mypy .
+        run: uv run --frozen mypy .
 
       - name: Pytest
-        run: uv run pytest -q
+        run: uv run --frozen pytest -q
 
   build-and-push:
     name: Build and Push Docker Image
@@ -99,12 +114,15 @@ jobs:
           APKIO_ORG_TOKEN_AUDIENCE: ${{ vars.APKIO_ORG_TOKEN_AUDIENCE }}
           APKIO_REQUIRED_PERMISSION: ${{ vars.APKIO_REQUIRED_PERMISSION }}
           APKIO_AUTO_CREATE_DOCTOR: ${{ vars.APKIO_AUTO_CREATE_DOCTOR }}
+          MEDICAL_UPLOAD_AUTH_REQUIRED: ${{ vars.MEDICAL_UPLOAD_AUTH_REQUIRED }}
+          APKIO_BASE_URL: ${{ vars.APKIO_BASE_URL }}
         run: |
           APKIO_AUTH_ENABLED="${APKIO_AUTH_ENABLED:-False}"
           APKIO_JWT_ALGORITHM="${APKIO_JWT_ALGORITHM:-HS256}"
           APKIO_ORG_TOKEN_AUDIENCE="${APKIO_ORG_TOKEN_AUDIENCE:-org}"
           APKIO_REQUIRED_PERMISSION="${APKIO_REQUIRED_PERMISSION:-ditan.access}"
           APKIO_AUTO_CREATE_DOCTOR="${APKIO_AUTO_CREATE_DOCTOR:-True}"
+          MEDICAL_UPLOAD_AUTH_REQUIRED="${MEDICAL_UPLOAD_AUTH_REQUIRED:-True}"
           if [ "$APKIO_AUTH_ENABLED" = "True" ] || [ "$APKIO_AUTH_ENABLED" = "true" ]; then
             if [ -z "$APKIO_JWT_SECRET_KEY" ]; then
               echo "::error::APKIO_JWT_SECRET_KEY GitHub secret is required when APKIO_AUTH_ENABLED is true"
@@ -152,6 +170,9 @@ jobs:
           APKIO_ORG_TOKEN_AUDIENCE=$APKIO_ORG_TOKEN_AUDIENCE
           APKIO_REQUIRED_PERMISSION=$APKIO_REQUIRED_PERMISSION
           APKIO_AUTO_CREATE_DOCTOR=$APKIO_AUTO_CREATE_DOCTOR
+          MEDICAL_UPLOAD_AUTH_REQUIRED=$MEDICAL_UPLOAD_AUTH_REQUIRED
+          APKIO_BASE_URL=$APKIO_BASE_URL
+          APKIO_ALLOW_LOOPBACK_HTTP=False
           EOF
 
       - name: Copy files to server
