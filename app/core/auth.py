@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.organization import LEGACY_ORG_ID
 from app.core.database import get_db
 from app.models import Doctor, Gender
 from app.schemas.doctor import TokenData
@@ -126,7 +127,7 @@ def decode_apkio_org_token(token: str) -> ApkioOrgTokenData:
     display_name = payload.get("displayName")
     if not isinstance(user_id, str) or not user_id:
         raise _credentials_exception()
-    if not isinstance(org_id, str) or not org_id:
+    if not isinstance(org_id, str) or not org_id.strip() or org_id == LEGACY_ORG_ID:
         raise _credentials_exception()
     if not isinstance(email, str) or not email:
         raise _credentials_exception()
@@ -196,7 +197,9 @@ async def _generate_apkio_placeholder_phone(
 
     for offset in range(1000):
         phone = f"19{(base_number + offset) % 1_000_000_000:09d}"
-        existing = await db.scalar(select(Doctor.doctor_id).where(Doctor.phone == phone))
+        existing = await db.scalar(
+            select(Doctor.doctor_id).where(Doctor.phone == phone)
+        )
         if existing is None:
             return phone
 
