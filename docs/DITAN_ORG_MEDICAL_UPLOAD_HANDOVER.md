@@ -82,9 +82,22 @@ httpx 已移入正式 dependencies；uv.lock 保留原镜像源和版本。Compo
 
 ## 真实联调与未验证项
 
-**尚未进行真实 Apkio / 两端上传或撤销联调。** Mock 仅证明 Ditan 对协议响应的行为。
+**2026-09-22 统一复核补充：真实 Apkio → Ditan 联调已完成，两端真机仍待验证。**
 
-后续需与 Apkio 功能分支验证：真实取票/上传成功；票据签发后 logout、业务会话 replaced/revoked、设备解绑、密钥吊销、组织/账号/License 停用后，下一次验票及上传失败（401 或 403）。已通过验票且执行中的事务按协议不追溯取消。
+在独立目录复跑 173 项测试（含 PostgreSQL 17 的 13 项迁移/并发）、Ruff、mypy 均通过。
+使用 Apkio 682099a 的 scripts/verify_medical_upload_integration.py，两个真实后端进程与临时
+PostgreSQL 数据库通过了 16 个 HTTP 检查点：成功/幂等/跨组织同号同 UUID、冲突、错误票据、
+上传身份审计，以及 logout/replaced、解绑、设备/密钥/用户/组织/License 停用及会话到期后的拒绝。
+每项撤销先证明同一张票据有效，拒绝后检查没有新增半条病例。仅使用合成数据和软件 EC 密钥。
+
+Android、HarmonyOS 已由主会话接入专用取票/上传请求头，临床 DTO 保持原样。
+两端通过各自 mock/构建验证，但尚未安装或做真实设备、硬件密钥、BLE 及四方上传联调。
+统一分支和本地配置说明：
+https://github.com/HuanyuTechTeam/Apkio/blob/feat/org-device-auth/docs/ORG_AUTH_JOINT_DEBUG.md
+
+补充联调的临时服务、容器、数据库与日志已清理；复用了本机既有 PostgreSQL 镜像，没有删除已有镜像。
+
+后续真机复验：取票/上传成功；票据签发后 logout、业务会话 replaced/revoked、设备解绑、密钥吊销、组织/账号/License 停用后，下一次验票及上传失败（401 或 403）。已通过验票且执行中的事务按协议不追溯取消。
 
 没有遗留协议实现疑问；以上联合状态变更和客户端队列行为需主会话复核。没有合并、部署、发布或手动触发 workflow。
 
