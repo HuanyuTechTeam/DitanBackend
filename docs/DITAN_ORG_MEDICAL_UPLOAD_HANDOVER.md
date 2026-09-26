@@ -1,6 +1,6 @@
 # Ditan 组织隔离与病例上传交接
 
-日期：2026-09-22。分支：`feat/org-medical-upload`。
+更新：2026-09-26。分支：`feat/org-medical-upload`。完整配置、迁移及兼容说明保留在本文。
 
 ## 基线与提交
 
@@ -10,7 +10,7 @@
 - `3b632de`：组织迁移、病例/诊断/聊天访问隔离、原子幂等上传和审计。
 - 包含本文档的提交 `test(medical): cover upload isolation and PostgreSQL migrations`：新增回归、CI PostgreSQL 服务、运行配置及交接。完整提交可用 `git log origin/main..feat/org-medical-upload --oneline` 查看。
 
-依据 Apkio `feat/org-device-auth` 分支的[开发任务](https://github.com/HuanyuTechTeam/Apkio/blob/distribution-provider-strategy/docs/DITAN_ORG_MEDICAL_UPLOAD_TASK.md)与[上传协议 v1](https://github.com/HuanyuTechTeam/Apkio/blob/distribution-provider-strategy/docs/MEDICAL_UPLOAD_AUTH_CONTRACT.md)。
+接口与幂等规则以 Apkio `distribution-provider-strategy` 的[上传协议 v1](https://github.com/HuanyuTechTeam/Apkio/blob/distribution-provider-strategy/docs/MEDICAL_UPLOAD_AUTH_CONTRACT.md)为准。已完成的并行开发任务单已移除，原始内容保留在 Git 历史中。
 
 ## 已实现行为
 
@@ -62,11 +62,10 @@ httpx 已移入正式 dependencies；uv.lock 保留原镜像源和版本。Compo
 - 未绑定组织的本地医生只能访问 legacy。医生绑定到 Apkio 组织后只访问该组织，不能自动读取旧数据；历史归属需另行核实迁移。
 - 聊天创建、详情、非流式、流式、关闭共五个入口全部要求现有医生身份。无 patient_id 的会话也有组织；历史匿名聊天只留给 legacy 医生。
 - 上传 scope 不授予聊天、病例查询、诊断权限。依赖匿名聊天的外部调用方需升级为医生鉴权；仓库内旧匿名示例和测试已更新，未发现另一个实际匿名聊天客户端。
-- Apkio、Android、HarmonyOS 未修改。客户端取票和真实联调由主会话继续。
 
 ## 验证结果
 
-本机 Windows / Python 3.11.13：
+2026-09-22 本机 Windows / Python 3.11.13 验证：
 
 - 全量 pytest：**173 passed**，包含原 61 项和新增 112 项。
 - 新增：上传协议/幂等/审计 82 项，组织/legacy/诊断/聊天隔离 17 项，真实 PostgreSQL 17 迁移与并发 13 项。
@@ -82,7 +81,7 @@ httpx 已移入正式 dependencies；uv.lock 保留原镜像源和版本。Compo
 
 ## 真实联调与未验证项
 
-**2026-09-22 统一复核补充：真实 Apkio → Ditan 联调已完成，两端真机仍待验证。**
+**真实 Apkio → Ditan 联调已完成；截至 2026-09-26，两端模拟器的鉴权、交接与草稿隔离也已通过。**
 
 在独立目录复跑 173 项测试（含 PostgreSQL 17 的 13 项迁移/并发）、Ruff、mypy 均通过。
 使用 Apkio 682099a 的 scripts/verify_medical_upload_integration.py，两个真实后端进程与临时
@@ -91,7 +90,8 @@ PostgreSQL 数据库通过了 16 个 HTTP 检查点：成功/幂等/跨组织同
 每项撤销先证明同一张票据有效，拒绝后检查没有新增半条病例。仅使用合成数据和软件 EC 密钥。
 
 Android、HarmonyOS 已由主会话接入专用取票/上传请求头，临床 DTO 保持原样。
-两端通过各自 mock/构建验证，但尚未安装或做真实设备、硬件密钥、BLE 及四方上传联调。
+两端已通过 mock/构建以及模拟器原生组织鉴权、双向交接和非空草稿隔离验证。
+完整客户端病例上传、在途 Worker、真实硬件密钥安全级别及相机/BLE 仍待验证。
 统一分支和本地配置说明：
 https://github.com/HuanyuTechTeam/Apkio/blob/distribution-provider-strategy/docs/ORG_AUTH_JOINT_DEBUG.md
 
@@ -103,5 +103,5 @@ https://github.com/HuanyuTechTeam/Apkio/blob/distribution-provider-strategy/docs
 
 ## 本机清理
 
-测试 schema 已逐项清理；任务专用 PostgreSQL 容器、tmpfs 数据库、此次新拉取的 postgres:17 镜像、生成的 __pycache__、测试日志和专用 mypy 缓存均已清理。
+测试 schema 已逐项清理；任务专用 PostgreSQL 容器、tmpfs 数据库、生成的 __pycache__、测试日志及专用缓存均已清理。本轮收尾还停止了客户端联调服务，并移除专用测试 SQLite 数据库和合成账号/激活码清单。
 未删除已有 PostgreSQL/PostGIS 容器、原数据库卷或已有镜像，保留 .venv 依赖环境。
