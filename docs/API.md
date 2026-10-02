@@ -26,7 +26,9 @@ Apkio token 必须满足：
 - `permissions` 包含 `APKIO_REQUIRED_PERMISSION`，默认 `ditan.access`
 - `sub + orgId` 已绑定到本地 `Doctor`；如果 `APKIO_AUTO_CREATE_DOCTOR=True`，首次访问会自动创建本地 `Doctor`
 
-当前需要 JWT 的接口：
+当前需要医生 JWT 的接口：
+
+- `/api/v1/chat/*`
 
 - `/api/v1/doctor/me`
 - `/api/v1/doctor/change-password`
@@ -44,8 +46,9 @@ Apkio token 必须满足：
 - `/`
 - `/api/v1/doctor/register`
 - `/api/v1/doctor/login`
-- `/api/v1/medical-record`
-- `/api/v1/chat/*`
+上传 `POST /api/v1/medical-record` 默认需要独立 `medicalUploadToken`。Ditan 每次在线验票后采用服务端返回的组织和上传者身份，票据不能用于医生、查询、诊断或聊天。
+
+医生访问按 `Doctor.apkio_org_id` 隔离；未绑定组织的本地医生仅访问 `__legacy__`。跨组织资源与不存在资源均返回 404。
 
 ## 响应约定
 
@@ -73,7 +76,7 @@ Apkio token 必须满足：
 
 ### 认证异常
 
-认证由 FastAPI `HTTPException` 直接返回，结构为：
+医生认证由 FastAPI `HTTPException` 直接返回，结构为：
 
 ```json
 {
@@ -90,6 +93,8 @@ Apkio token 必须满足：
 - `Apkio 账号未绑定医生身份`
 - `用户名/手机号或密码错误`
 
+上传错误保留 `success/message/detail` 并附加 `code/requestId`；响应头 `X-Request-Id` 由服务器生成。兼容模式仅完全没有 Authorization 的请求可写 legacy，空凭证或无效凭证仍然失败。
+
 ## 路由总览
 
 | 方法 | 路径 | 认证 | 说明 |
@@ -102,7 +107,7 @@ Apkio token 必须满足：
 | `PUT` | `/api/v1/doctor/me` | 是 | 更新当前医生信息 |
 | `POST` | `/api/v1/doctor/change-password` | 是 | 修改密码 |
 | `GET` | `/api/v1/patient/query?phone=...` | 是 | 按手机号查询患者 |
-| `POST` | `/api/v1/medical-record` | 否 | 创建就诊记录 |
+| `POST` | `/api/v1/medical-record` | 上传票据 | 创建就诊记录 |
 | `GET` | `/api/v1/medical-record/{record_id}` | 是 | 获取完整就诊记录 |
 | `POST` | `/api/v1/medical-record/{record_id}/ai-diagnosis` | 是 | 同步 AI 诊断 |
 | `POST` | `/api/v1/medical-record/{record_id}/ai-diagnosis/stream` | 是 | 流式 AI 诊断 |
@@ -110,11 +115,11 @@ Apkio token 必须满足：
 | `PUT` | `/api/v1/doctor-diagnosis/{diagnosis_id}` | 是 | 更新医生诊断 |
 | `GET` | `/api/v1/doctor-diagnosis/{diagnosis_id}` | 是 | 获取医生诊断详情 |
 | `POST` | `/api/v1/medical-record/{record_id}/confirm` | 是 | 确认就诊完成 |
-| `POST` | `/api/v1/chat/conversation` | 否 | 创建聊天会话 |
-| `GET` | `/api/v1/chat/conversation/{session_id}` | 否 | 获取会话详情 |
-| `POST` | `/api/v1/chat/chat` | 否 | 非流式聊天 |
-| `POST` | `/api/v1/chat/chat/stream` | 否 | 流式聊天 |
-| `DELETE` | `/api/v1/chat/conversation/{session_id}` | 否 | 关闭会话 |
+| `POST` | `/api/v1/chat/conversation` | 医生 JWT | 创建聊天会话 |
+| `GET` | `/api/v1/chat/conversation/{session_id}` | 医生 JWT | 获取会话详情 |
+| `POST` | `/api/v1/chat/chat` | 医生 JWT | 非流式聊天 |
+| `POST` | `/api/v1/chat/chat/stream` | 医生 JWT | 流式聊天 |
+| `DELETE` | `/api/v1/chat/conversation/{session_id}` | 医生 JWT | 关闭会话 |
 
 ## 系统接口
 
@@ -261,7 +266,9 @@ Apkio token 必须满足：
 
 ### `POST /api/v1/medical-record`
 
-该接口通常由预问诊系统调用，无需 JWT。
+该接口由预问诊系统携带 `Authorization: Bearer <medicalUploadToken>` 调用。缺票/无效/过期为 401，身份禁用为 403，验票不可达或响应不符合协议为 503。
+
+相同组织、病例 UUID 和规范化内容的重传仍返回 201 和原 ID；内容冲突或历史记录缺少内容摘要时返回 409。`patient_phone` 与 `patient_info.phone` 必须一致。组织、上传者、设备、来源会话均来自在线验票，body/query/header 自报身份不参与授权。
 
 请求体：
 

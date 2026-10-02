@@ -11,7 +11,8 @@ settings = get_settings()
 
 engine = create_async_engine(
     settings.database_url,
-    echo=settings.APP_DEBUG,
+    echo=False,
+    hide_parameters=True,
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
@@ -46,9 +47,26 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    """初始化数据库"""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Check the Alembic version; never mutate the schema at startup."""
+    from pathlib import Path
+    from alembic.config import Config
+    from alembic.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
+    root = Path(__file__).resolve().parents[2]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+    head = ScriptDirectory.from_config(config).get_current_head()
+    async with engine.connect() as conn:
+        revision = await conn.run_sync(
+            lambda connection: MigrationContext.configure(
+                connection
+            ).get_current_revision()
+        )
+    if revision != head:
+        raise RuntimeError(
+            "Database schema is outdated; run 'alembic upgrade head' before startup."
+        )
 
 
 async def close_db():

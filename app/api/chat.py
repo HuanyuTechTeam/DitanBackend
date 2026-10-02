@@ -4,13 +4,11 @@ import json
 
 from fastapi import APIRouter, Depends, Path
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
-from app.api.deps import RequestContext, get_request_context
+from app.api.deps import RequestContext, get_auth_context
 from app.core import get_settings
-from app.core.exceptions import NotFoundException, ValidationException
-from app.models.chat import ChatConversation
+from app.core.organization import OrganizationContext
+from app.core.exceptions import BaseAPIException, NotFoundException, ValidationException
 from app.schemas import APIResponse
 from app.schemas.chat import (
     ConversationCreate,
@@ -26,9 +24,10 @@ router = APIRouter()
 settings = get_settings()
 
 
-def get_chat_service() -> ChatService:
+def get_chat_service(organization: OrganizationContext) -> ChatService:
     """获取聊天服务实例"""
     return ChatService(
+        organization=organization,
         api_key=settings.AI_API_KEY,
         base_url=settings.AI_BASE_URL,
         model_name=settings.AI_MODEL_NAME,
@@ -38,13 +37,13 @@ def get_chat_service() -> ChatService:
 @router.post("/conversation", response_model=APIResponse, status_code=201)
 async def create_conversation(
     data: ConversationCreate,
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(get_auth_context),
 ):
     """创建新的聊天会话"""
     try:
         ctx.log_info("创建聊天会话")
 
-        chat_service = get_chat_service()
+        chat_service = get_chat_service(ctx.organization)
         conversation = await chat_service.create_conversation(
             db=ctx.db,
             system_prompt=data.system_prompt,
@@ -60,6 +59,8 @@ async def create_conversation(
             message="会话创建成功",
             data=ConversationResponse.model_validate(conversation).model_dump(),
         )
+    except BaseAPIException:
+        raise
     except Exception as e:
         ctx.log_error("创建会话失败", e)
         raise ValidationException("创建会话失败", str(e))
@@ -68,18 +69,17 @@ async def create_conversation(
 @router.get("/conversation/{session_id}", response_model=APIResponse, status_code=200)
 async def get_conversation(
     session_id: str = Path(..., description="会话ID"),
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(get_auth_context),
 ):
     """获取会话详情（包含消息历史）"""
     try:
         ctx.log_info(f"获取会话: session_id={session_id}")
 
-        result = await ctx.db.execute(
-            select(ChatConversation)
-            .options(selectinload(ChatConversation.messages))
-            .where(ChatConversation.session_id == session_id)
+        conversation = await get_chat_service(ctx.organization).get_conversation(
+            ctx.db,
+            session_id,
+            load_messages=True,
         )
-        conversation = result.scalar_one_or_none()
 
         if not conversation:
             raise NotFoundException(f"会话不存在: {session_id}")
@@ -109,6 +109,8 @@ async def get_conversation(
         )
     except NotFoundException:
         raise
+    except BaseAPIException:
+        raise
     except Exception as e:
         ctx.log_error("获取会话失败", e)
         raise ValidationException("获取会话失败", str(e))
@@ -117,13 +119,13 @@ async def get_conversation(
 @router.post("/chat", response_model=APIResponse, status_code=200)
 async def chat(
     data: ChatRequest,
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(get_auth_context),
 ):
     """发送消息（非流式）"""
     try:
         ctx.log_info(f"发送消息: session_id={data.session_id}")
 
-        chat_service = get_chat_service()
+        chat_service = get_chat_service(ctx.organization)
         response = await chat_service.chat(
             db=ctx.db,
             session_id=data.session_id,
@@ -138,6 +140,8 @@ async def chat(
         )
     except ValueError as e:
         raise NotFoundException(str(e))
+    except BaseAPIException:
+        raise
     except Exception as e:
         ctx.log_error("发送消息失败", e)
         raise ValidationException("发送消息失败", str(e))
@@ -146,12 +150,12 @@ async def chat(
 @router.post("/chat/stream", status_code=200)
 async def chat_stream(
     data: ChatStreamRequest,
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(get_auth_context),
 ):
     """发送消息（流式返回）"""
     ctx.log_info(f"流式聊天: session_id={data.session_id}")
 
-    chat_service = get_chat_service()
+    chat_service = get_chat_service(ctx.organization)
 
     # 检查会话是否存在
     conversation = await chat_service.get_conversation(
@@ -191,13 +195,13 @@ async def chat_stream(
 )
 async def close_conversation(
     session_id: str = Path(..., description="会话ID"),
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(get_auth_context),
 ):
     """关闭会话"""
     try:
         ctx.log_info(f"关闭会话: session_id={session_id}")
 
-        chat_service = get_chat_service()
+        chat_service = get_chat_service(ctx.organization)
         success = await chat_service.close_conversation(ctx.db, session_id)
 
         if not success:
@@ -210,6 +214,8 @@ async def close_conversation(
             data={"session_id": session_id},
         )
     except NotFoundException:
+        raise
+    except BaseAPIException:
         raise
     except Exception as e:
         ctx.log_error("关闭会话失败", e)

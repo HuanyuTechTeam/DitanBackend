@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_db, get_current_active_doctor, get_structured_logger
 from app.models import Doctor
+from app.core.organization import LEGACY_ORG_ID, OrganizationContext
+from app.core.upload_auth import UploadPrincipal, get_upload_principal
 
 logger = get_structured_logger(__name__)
 
@@ -14,14 +16,44 @@ class RequestContext:
     """请求上下文"""
 
     def __init__(
-        self, request: Request, db: AsyncSession, doctor: Optional[Doctor] = None
+        self,
+        request: Request,
+        db: AsyncSession,
+        doctor: Optional[Doctor] = None,
+        upload: Optional[UploadPrincipal] = None,
     ):
         self.request = request
         self.db = db
         self.doctor = doctor
+        self.upload = upload
+        self._organization = (
+            upload.organization
+            if upload
+            else (
+                OrganizationContext(
+                    doctor.apkio_org_id
+                    if doctor.apkio_org_id is not None
+                    else LEGACY_ORG_ID
+                )
+                if doctor
+                else None
+            )
+        )
         self.method = request.method
         self.path = request.url.path
         self.endpoint = f"{request.method} {request.url.path}"
+
+    @property
+    def organization(self) -> OrganizationContext:
+        if self._organization is None:
+            raise RuntimeError("This operation requires an organization")
+        return self._organization
+
+    @property
+    def current_upload(self) -> UploadPrincipal:
+        if self.upload is None:
+            raise RuntimeError("This operation requires an upload principal")
+        return self.upload
 
     @property
     def current_doctor(self) -> Doctor:
@@ -38,6 +70,8 @@ class RequestContext:
             "method": self.method,
             "path": self.path,
         }
+        if self._organization:
+            data["org_id"] = self._organization.org_id
         if self.doctor:
             data["doctor_id"] = self.doctor.doctor_id
         if extra:
@@ -83,3 +117,11 @@ async def get_auth_context(
 ) -> RequestContext:
     """获取请求上下文（需要认证）"""
     return RequestContext(request=request, db=db, doctor=doctor)
+
+
+async def get_upload_context(
+    request: Request,
+    principal: UploadPrincipal = Depends(get_upload_principal),
+    db: AsyncSession = Depends(get_db),
+) -> RequestContext:
+    return RequestContext(request=request, db=db, upload=principal)

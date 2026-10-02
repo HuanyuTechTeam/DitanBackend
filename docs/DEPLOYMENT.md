@@ -67,10 +67,10 @@ CREATE DATABASE ditan_db;
 
 ### 3. 初始化表结构
 
-项目启动时会自动执行 `Base.metadata.create_all()`。如果希望显式初始化，可先执行：
+应用启动前必须升级 Alembic；启动时仅核对 schema 版本：
 
 ```bash
-uv run python scripts/init_db.py
+uv run --frozen alembic upgrade head
 ```
 
 ### 4. 启动服务
@@ -170,19 +170,14 @@ logs/app.log
 
 ## 数据库初始化与迁移
 
-当前代码的真实行为：
+空库和已有库均先运行 `uv run --frozen alembic upgrade head`。应用启动只检查 Alembic head，版本不符则拒绝启动。
 
-- 启动时执行 `create_all()` 创建缺失表
-- 不会在启动时自动运行 Alembic
-- 仓库中存在 `alembic/` 和一个迁移文件 `001_add_sanzhen_image_urls.py`
+部署前核对数据库版本并备份。003 从真实的 `002_add_apkio_doctor_bindings` 接续，保留未知归属数据在 `__legacy__`。
+没有 Alembic 版本记录的旧库需单独核对实际 schema 后处理，不得直接猜测版本或删除数据重建。
 
-如果是全新环境，直接初始化或启动即可。
-
-如果是已有生产数据库，建议：
-
-1. 先备份数据库
-2. 明确当前数据库版本
-3. 再决定是手动执行迁移、运行 Alembic，还是重建开发环境数据库
+上传默认 `MEDICAL_UPLOAD_AUTH_REQUIRED=True`，另需设置 `APKIO_BASE_URL=https://<apkio-host>/api`。
+该上传验票不需要新 JWT 密钥。非本地必须使用 HTTPS；本地 loopback HTTP 需显式允许。
+现有医生 Apkio JWT 配置保持原用途。详见[组织上传交接](DITAN_ORG_MEDICAL_UPLOAD_HANDOVER.md)。
 
 ## 常见问题
 

@@ -1,19 +1,19 @@
 """诊断记录数据访问层"""
 
 from typing import Optional, Sequence
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import AIDiagnosisRecord, DoctorDiagnosisRecord
-from app.repositories.base import BaseRepository
+from app.repositories.organization import OrganizationRepository
+from app.core.organization import OrganizationContext
 
 
-class AIDiagnosisRepository(BaseRepository[AIDiagnosisRecord]):
+class AIDiagnosisRepository(OrganizationRepository[AIDiagnosisRecord]):
     """AI 诊断 Repository"""
 
-    def __init__(self, db: AsyncSession):
-        super().__init__(db, AIDiagnosisRecord)
+    def __init__(self, db: AsyncSession, organization: OrganizationContext):
+        super().__init__(db, AIDiagnosisRecord, organization)
 
     async def get_by_diagnosis_id(
         self, diagnosis_id: int
@@ -23,7 +23,7 @@ class AIDiagnosisRepository(BaseRepository[AIDiagnosisRecord]):
 
     async def get_by_record_id(self, record_id: int) -> Sequence[AIDiagnosisRecord]:
         """获取就诊记录的所有 AI 诊断"""
-        stmt = select(AIDiagnosisRecord).where(AIDiagnosisRecord.record_id == record_id)
+        stmt = self._select().where(AIDiagnosisRecord.record_id == record_id)
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
@@ -33,7 +33,7 @@ class AIDiagnosisRepository(BaseRepository[AIDiagnosisRecord]):
         record_id: int,
     ) -> Optional[AIDiagnosisRecord]:
         """根据诊断ID和记录ID获取"""
-        stmt = select(AIDiagnosisRecord).where(
+        stmt = self._select().where(
             AIDiagnosisRecord.diagnosis_id == diagnosis_id,
             AIDiagnosisRecord.record_id == record_id,
         )
@@ -65,11 +65,11 @@ class AIDiagnosisRepository(BaseRepository[AIDiagnosisRecord]):
         return await self.create(ai_diagnosis)
 
 
-class DoctorDiagnosisRepository(BaseRepository[DoctorDiagnosisRecord]):
+class DoctorDiagnosisRepository(OrganizationRepository[DoctorDiagnosisRecord]):
     """医生诊断 Repository"""
 
-    def __init__(self, db: AsyncSession):
-        super().__init__(db, DoctorDiagnosisRecord)
+    def __init__(self, db: AsyncSession, organization: OrganizationContext):
+        super().__init__(db, DoctorDiagnosisRecord, organization)
 
     async def get_by_diagnosis_id(
         self,
@@ -78,9 +78,7 @@ class DoctorDiagnosisRepository(BaseRepository[DoctorDiagnosisRecord]):
         load_medical_record: bool = False,
     ) -> Optional[DoctorDiagnosisRecord]:
         """根据诊断ID获取"""
-        stmt = select(DoctorDiagnosisRecord).where(
-            DoctorDiagnosisRecord.diagnosis_id == diagnosis_id
-        )
+        stmt = self._select().where(DoctorDiagnosisRecord.diagnosis_id == diagnosis_id)
 
         options = []
         if load_doctor:
@@ -100,9 +98,7 @@ class DoctorDiagnosisRepository(BaseRepository[DoctorDiagnosisRecord]):
         load_doctor: bool = False,
     ) -> Sequence[DoctorDiagnosisRecord]:
         """获取就诊记录的所有医生诊断"""
-        stmt = select(DoctorDiagnosisRecord).where(
-            DoctorDiagnosisRecord.record_id == record_id
-        )
+        stmt = self._select().where(DoctorDiagnosisRecord.record_id == record_id)
         if load_doctor:
             stmt = stmt.options(selectinload(DoctorDiagnosisRecord.doctor))
         result = await self.db.execute(stmt)
@@ -138,6 +134,7 @@ class DoctorDiagnosisRepository(BaseRepository[DoctorDiagnosisRecord]):
         **fields,
     ) -> DoctorDiagnosisRecord:
         """更新诊断字段"""
+        await self._authorize_entity(diagnosis)
         for field, value in fields.items():
             if value is not None:
                 setattr(diagnosis, field, value)

@@ -114,10 +114,10 @@ CREATE DATABASE ditan_db;
 
 ### 4. 初始化表结构
 
-应用启动时会执行 `Base.metadata.create_all()` 自动创建表；如果你想在启动前先初始化，也可以执行：
+应用启动只检查 Alembic 版本。空库和已有库均先执行迁移（保留历史数据）：
 
 ```bash
-uv run python scripts/init_db.py
+uv run --frozen alembic upgrade head
 ```
 
 ### 5. 启动服务
@@ -146,7 +146,10 @@ uv run python main.py
 - 开启 `APKIO_AUTH_ENABLED=True` 后，受保护接口同时接受 Apkio Org 用户 JWT 和原本地医生 JWT
 - Apkio token 必须包含 `aud=org`、`sub`、`orgId`、`email`，并具备 `APKIO_REQUIRED_PERMISSION` 指定的权限
 - `APKIO_AUTO_CREATE_DOCTOR=True` 时，首次访问会自动创建本地 `Doctor`；如果关闭该选项，则 `sub + orgId` 需要先绑定到本地 `Doctor`
-- `/api/v1/chat/*` 当前无需 JWT
+- `/api/v1/chat/*` 需要医生 JWT，所有访问限定医生所属组织
+- `POST /api/v1/medical-record` 默认需要独立 `medicalUploadToken`，每次请求向 `APKIO_BASE_URL` 在线验票；上传不会创建医生
+- 未绑定组织的本地医生只能访问 `__legacy__` 历史区；绑定医生只能访问 `Doctor.apkio_org_id`
+- `MEDICAL_UPLOAD_AUTH_REQUIRED=False` 仅允许完全缺少 Authorization 的旧上传进入 `__legacy__`，带无效凭证仍拒绝
 
 认证请求头格式：
 
@@ -187,6 +190,7 @@ uv run python scripts/bind_apkio_doctors.py bindings.csv
 
 ## 文档索引
 
+- [组织上传交接](docs/DITAN_ORG_MEDICAL_UPLOAD_HANDOVER.md)
 - [API 文档](docs/API.md)
 - [快速上手](docs/QUICKSTART.md)
 - [部署文档](docs/DEPLOYMENT.md)

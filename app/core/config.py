@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     APKIO_REQUIRED_PERMISSION: str = "ditan.access"
     APKIO_AUTO_CREATE_DOCTOR: bool = True
 
+    MEDICAL_UPLOAD_AUTH_REQUIRED: bool = True
+    APKIO_BASE_URL: str = ""
+    APKIO_ALLOW_LOOPBACK_HTTP: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

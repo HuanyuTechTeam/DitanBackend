@@ -15,6 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core import get_logger
+from app.core.organization import OrganizationContext
+from app.core.exceptions import NotFoundException
+from app.repositories.patient_repository import PatientRepository
 from app.models.chat import ChatConversation, ChatMessage, MessageRole
 from app.services.openai_client import OpenAIChatCompletion
 
@@ -38,11 +41,27 @@ MAX_CONTEXT_MESSAGES = 20
 class ChatService:
     """聊天服务类"""
 
-    def __init__(self, api_key: str, base_url: str, model_name: str):
-        self.ai_client = OpenAIChatCompletion(
-            api_key=api_key, base_url=base_url, model_name=model_name
-        )
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        model_name: str,
+        organization: OrganizationContext,
+    ):
+        self.organization = organization
+        self._ai_config = {
+            "api_key": api_key,
+            "base_url": base_url,
+            "model_name": model_name,
+        }
+        self._ai_client: Optional[OpenAIChatCompletion] = None
         logger.info(f"ChatService初始化: model={model_name}")
+
+    @property
+    def ai_client(self) -> OpenAIChatCompletion:
+        if self._ai_client is None:
+            self._ai_client = OpenAIChatCompletion(**self._ai_config)
+        return self._ai_client
 
     async def create_conversation(
         self,
@@ -52,6 +71,12 @@ class ChatService:
         initial_context: Optional[str] = None,
     ) -> ChatConversation:
         """创建新的聊天会话"""
+        if patient_id is not None:
+            patient = await PatientRepository(db, self.organization).get_by_patient_id(
+                patient_id
+            )
+            if patient is None:
+                raise NotFoundException("未找到患者")
         session_id = str(uuid.uuid4())
 
         final_system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
@@ -61,6 +86,7 @@ class ChatService:
             )
 
         conversation = ChatConversation(
+            org_id=self.organization.org_id,
             session_id=session_id,
             patient_id=patient_id,
             system_prompt=final_system_prompt,
@@ -83,10 +109,13 @@ class ChatService:
     ) -> Optional[ChatConversation]:
         """获取会话"""
         query = select(ChatConversation).where(
-            ChatConversation.session_id == session_id
+            ChatConversation.session_id == session_id,
+            ChatConversation.org_id == self.organization.org_id,
         )
         if load_messages:
-            query = query.options(selectinload(ChatConversation.messages))
+            query = query.options(
+                selectinload(ChatConversation.messages)
+            ).execution_options(populate_existing=True)
 
         result = await db.execute(query)
         return result.scalar_one_or_none()
@@ -100,6 +129,14 @@ class ChatService:
         tokens: Optional[int] = None,
     ) -> ChatMessage:
         """添加消息到会话"""
+        parent = await db.scalar(
+            select(ChatConversation.conversation_id).where(
+                ChatConversation.conversation_id == conversation_id,
+                ChatConversation.org_id == self.organization.org_id,
+            )
+        )
+        if parent is None:
+            raise NotFoundException("会话不存在")
         message = ChatMessage(
             conversation_id=conversation_id,
             role=role,
@@ -166,7 +203,7 @@ class ChatService:
         """非流式聊天"""
         conversation = await self.get_conversation(db, session_id, load_messages=True)
         if not conversation:
-            raise ValueError(f"会话不存在: {session_id}")
+            raise NotFoundException("会话不存在")
 
         if not conversation.is_active:
             raise ValueError(f"会话已关闭: {session_id}")
@@ -205,7 +242,7 @@ class ChatService:
         """流式聊天"""
         conversation = await self.get_conversation(db, session_id, load_messages=True)
         if not conversation:
-            raise ValueError(f"会话不存在: {session_id}")
+            raise NotFoundException("会话不存在")
 
         if not conversation.is_active:
             raise ValueError(f"会话已关闭: {session_id}")

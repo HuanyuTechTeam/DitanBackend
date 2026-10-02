@@ -34,7 +34,7 @@ from app.models import (  # noqa: F401
 config = context.config
 
 # 设置日志
-if config.config_file_name is not None:
+if config.config_file_name is not None and config.attributes.get("configure_logger", True):
     fileConfig(config.config_file_name)
 
 # 设置 target_metadata 用于 autogenerate
@@ -93,7 +93,11 @@ async def run_async_migrations() -> None:
 
 def run_migrations_online() -> None:
     """以在线模式运行迁移"""
-    asyncio.run(run_async_migrations())
+    connection = config.attributes.get("connection")
+    if connection is not None:
+        do_run_migrations(connection)
+    else:
+        asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():

@@ -6,25 +6,20 @@
 - `app/models/medical.py`
 - `app/models/chat.py`
 
-## 当前建表方式
+## 当前建表与迁移方式
 
-项目启动时会执行：
+空库和已有库均运行 `uv run --frozen alembic upgrade head`。应用启动只检查 Alembic head，不再自动建表。
 
-```python
-await init_db()
-```
+迁移链：`000_initial_schema → 001_add_sanzhen_image_urls → 002_add_apkio_doctor_bindings → 003_org_medical_upload`。
+000 是固定历史建表基线，已经位于 001/002 的旧库不会重复执行。
 
-而 `init_db()` 内部调用的是：
+Patient、PatientMedicalRecord、PreDiagnosisRecord 和 ChatConversation 均有非空 `org_id`。
+唯一键分别为 `(org_id, phone)`、`(org_id, uuid)`、`(org_id, uuid)`；父子组织一致由复合外键保障。
+诊断和三诊结果按父记录授权，ChatMessage 按父会话授权。历史数据保留在 `__legacy__`，不自动分配给新组织。
+PatientMedicalRecord 保存 `upload_digest` 和首次上传的 user/device/client-session/request ID，重试不修改这些字段。
 
-```python
-Base.metadata.create_all()
-```
-
-这意味着：
-
-- 全新数据库可在应用启动时自动建表
-- 应用启动时不会自动执行 Alembic migration
-- 变更现有生产库时，仍然应该先评估迁移方案
+降级恢复全局唯一前会检查三处重复值；存在跨组织重复数据时拒绝整个降级，保留数据与当前版本。
+迁移需要在线检查旧约束，不支持用离线 SQL 或 create_all 替代。操作步骤见[交接文档](DITAN_ORG_MEDICAL_UPLOAD_HANDOVER.md)。
 
 ## 核心实体
 

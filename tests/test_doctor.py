@@ -426,6 +426,7 @@ class TestPasswordChange:
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("legacy_uploads")
 class TestDoctorDiagnosisIntegration:
     """医生诊断集成测试"""
 

@@ -1,6 +1,5 @@
 """测试配置"""
 
-import asyncio
 import os
 from typing import AsyncGenerator
 
@@ -31,12 +30,29 @@ test_session_maker = async_sessionmaker(
 )
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """创建事件循环"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+@pytest.fixture
+def legacy_uploads(monkeypatch):
+    """Old API regression tests explicitly opt into the legacy compartment."""
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "MEDICAL_UPLOAD_AUTH_REQUIRED", False)
+
+
+@pytest.fixture(autouse=True)
+def no_live_http(monkeypatch):
+    """Fail instead of reaching a real AI or authorization endpoint in tests."""
+    import httpx
+
+    def deny(*args, **kwargs):
+        raise AssertionError(
+            "Live HTTP is forbidden in tests; use MockTransport or AI mocks"
+        )
+
+    async def deny_async(*args, **kwargs):
+        deny()
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", deny)
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", deny_async)
 
 
 @pytest.fixture(scope="function")
@@ -89,7 +105,12 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """创建测试客户端"""
 
     async def override_get_db():
-        yield db_session
+        try:
+            yield db_session
+            await db_session.commit()
+        except BaseException:
+            await db_session.rollback()
+            raise
 
     app.dependency_overrides[get_db] = override_get_db
 
@@ -98,3 +119,58 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield ac
 
     app.dependency_overrides.clear()
+
+
+class UploadVerifier:
+    def __init__(self):
+        import httpx
+        from tests.org_helpers import identity
+
+        self.requests = []
+        self.responses = {
+            "upload-a": httpx.Response(200, json=identity("org-a")),
+            "upload-b": httpx.Response(200, json=identity("org-b")),
+        }
+        self.error = None
+
+    def handle(self, request):
+        import httpx
+
+        self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        token = request.headers["authorization"].removeprefix("Bearer ")
+        return self.responses.get(
+            token,
+            httpx.Response(
+                401,
+                json={
+                    "requestId": "test-rejected",
+                    "code": "AUTH_TOKEN_INVALID",
+                    "message": "invalid",
+                    "data": None,
+                },
+            ),
+        )
+
+
+@pytest.fixture
+def verifier(monkeypatch):
+    import httpx
+    import app.core.upload_auth as upload_auth
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "MEDICAL_UPLOAD_AUTH_REQUIRED", True)
+    monkeypatch.setattr(get_settings(), "APKIO_BASE_URL", "https://apkio.invalid/api")
+    verifier = UploadVerifier()
+    real_client = httpx.AsyncClient
+
+    def factory(**kwargs):
+        assert kwargs["follow_redirects"] is False
+        assert kwargs["verify"] is True
+        assert kwargs["trust_env"] is False
+        assert kwargs["timeout"].connect == 2
+        return real_client(transport=httpx.MockTransport(verifier.handle), **kwargs)
+
+    monkeypatch.setattr(upload_auth.httpx, "AsyncClient", factory)
+    return verifier
