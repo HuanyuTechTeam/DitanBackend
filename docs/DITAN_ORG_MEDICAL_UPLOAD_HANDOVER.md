@@ -10,7 +10,7 @@
 - `3b632de`：组织迁移、病例/诊断/聊天访问隔离、原子幂等上传和审计。
 - 包含本文档的提交 `test(medical): cover upload isolation and PostgreSQL migrations`：新增回归、CI PostgreSQL 服务、运行配置及交接。完整提交可用 `git log origin/main..feat/org-medical-upload --oneline` 查看。
 
-接口与幂等规则以 Apkio `distribution-provider-strategy` 的[上传协议 v1](https://github.com/HuanyuTechTeam/Apkio/blob/distribution-provider-strategy/docs/MEDICAL_UPLOAD_AUTH_CONTRACT.md)为准。已完成的并行开发任务单已移除，原始内容保留在 Git 历史中。
+接口与幂等规则以 Apkio `main` 的[上传协议 v1](https://github.com/HuanyuTechTeam/Apkio/blob/main/docs/MEDICAL_UPLOAD_AUTH_CONTRACT.md)为准。已完成的并行开发任务单已移除，原始内容保留在 Git 历史中。
 
 ## 已实现行为
 
@@ -93,7 +93,7 @@ Android、HarmonyOS 已由主会话接入专用取票/上传请求头，临床 D
 两端已通过 mock/构建以及模拟器原生组织鉴权、双向交接和非空草稿隔离验证。
 完整客户端病例上传、在途 Worker、真实硬件密钥安全级别及相机/BLE 仍待验证。
 统一分支和本地配置说明：
-https://github.com/HuanyuTechTeam/Apkio/blob/distribution-provider-strategy/docs/ORG_AUTH_JOINT_DEBUG.md
+https://github.com/HuanyuTechTeam/Apkio/blob/main/docs/ORG_AUTH_JOINT_DEBUG.md
 
 补充联调的临时服务、容器、数据库与日志已清理；复用了本机既有 PostgreSQL 镜像，没有删除已有镜像。
 
