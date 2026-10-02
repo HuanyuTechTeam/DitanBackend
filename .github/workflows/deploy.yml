@@ -123,6 +123,27 @@ jobs:
           APKIO_REQUIRED_PERMISSION="${APKIO_REQUIRED_PERMISSION:-ditan.access}"
           APKIO_AUTO_CREATE_DOCTOR="${APKIO_AUTO_CREATE_DOCTOR:-True}"
           MEDICAL_UPLOAD_AUTH_REQUIRED="${MEDICAL_UPLOAD_AUTH_REQUIRED:-True}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+
+          try:
+              endpoint = urlsplit(os.environ.get("APKIO_BASE_URL", "").rstrip("/"))
+              valid = (
+                  endpoint.scheme == "https"
+                  and bool(endpoint.hostname)
+                  and endpoint.path == "/api"
+                  and endpoint.username is None
+                  and endpoint.password is None
+                  and not endpoint.query
+                  and not endpoint.fragment
+              )
+              endpoint.port
+          except ValueError:
+              valid = False
+          if not valid:
+              raise SystemExit("APKIO_BASE_URL must be an HTTPS API root ending in /api")
+          PY
           if [ "$APKIO_AUTH_ENABLED" = "True" ] || [ "$APKIO_AUTH_ENABLED" = "true" ]; then
             if [ -z "$APKIO_JWT_SECRET_KEY" ]; then
               echo "::error::APKIO_JWT_SECRET_KEY GitHub secret is required when APKIO_AUTH_ENABLED is true"
@@ -242,6 +263,21 @@ jobs:
             
             echo "🚀 启动数据库..."
             $DOCKER_COMPOSE_CMD up -d db
+
+            echo "💾 迁移前备份数据库..."
+            for i in {1..30}; do
+              if $DOCKER_COMPOSE_CMD exec -T db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"' >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
+            umask 077
+            mkdir -p backups
+            BACKUP_PATH="backups/pre-migration-${{ github.sha }}-$(date -u +%Y%m%dT%H%M%SZ).dump"
+            $DOCKER_COMPOSE_CMD exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' > "$BACKUP_PATH"
+            test -s "$BACKUP_PATH"
+            $DOCKER_COMPOSE_CMD exec -T db pg_restore --list < "$BACKUP_PATH" > /dev/null
+            echo "✅ 数据库备份已验证: $BACKUP_PATH"
             
             echo "🔄 执行数据库迁移..."
             if $DOCKER_COMPOSE_CMD --profile tools run --rm migrate; then
@@ -257,8 +293,7 @@ jobs:
             echo "🚀 启动应用容器..."
             $DOCKER_COMPOSE_CMD up -d app
             
-            echo "🧹 清理未使用的镜像..."
-            sudo docker image prune -af --filter "label!=keep" 2>&1 || echo "⚠️ 镜像清理遇到问题，继续执行..."
+            # 保留上一版应用镜像供故障排查；不要清理服务器上其他项目的镜像。
             
             echo "⏳ 等待服务完全启动..."
             sleep 10

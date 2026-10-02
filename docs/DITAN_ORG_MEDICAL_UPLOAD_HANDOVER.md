@@ -1,6 +1,7 @@
 # Ditan 组织隔离与病例上传交接
 
-更新：2026-09-26。分支：`feat/org-medical-upload`。完整配置、迁移及兼容说明保留在本文。
+更新：2026-10-02。PR #11 合并后统一使用 `main`，本机目录 D:/projects/DitanBackend。
+完整配置、迁移及兼容说明保留在本文。
 
 ## 基线与提交
 
@@ -8,7 +9,7 @@
 
 - `528a0ce`：独立上传验票、不可变身份及配置。
 - `3b632de`：组织迁移、病例/诊断/聊天访问隔离、原子幂等上传和审计。
-- 包含本文档的提交 `test(medical): cover upload isolation and PostgreSQL migrations`：新增回归、CI PostgreSQL 服务、运行配置及交接。完整提交可用 `git log origin/main..feat/org-medical-upload --oneline` 查看。
+- `0a9f834`：新增回归、CI PostgreSQL 服务、运行配置及交接。合并后的完整提交可用 `git log 2910561..main --oneline` 查看。
 
 接口与幂等规则以 Apkio `main` 的[上传协议 v1](https://github.com/HuanyuTechTeam/Apkio/blob/main/docs/MEDICAL_UPLOAD_AUTH_CONTRACT.md)为准。已完成的并行开发任务单已移除，原始内容保留在 Git 历史中。
 
@@ -34,14 +35,18 @@
 
 追加路径为 `/client/medical-upload/current`。HTTPS 验证证书，禁用重定向与环境代理；连接超时 2 秒，整个网络阶段最多 5 秒。
 
-httpx 已移入正式 dependencies；uv.lock 保留原镜像源和版本。Compose、开发 Compose、CI 生成配置已传递新增变量；未来部署需配置 APKIO_BASE_URL。生产配置保持 loopback HTTP 关闭。
+httpx 已移入正式 dependencies；uv.lock 保留原镜像源和版本。Compose、开发 Compose、CI 生成配置已传递新增变量。
+2026-10-02 已配置仓库变量 APKIO_BASE_URL=https://app.huanyuai.top/api，MEDICAL_UPLOAD_AUTH_REQUIRED=True，
+并从生产容器确认验票接口可达。生产配置保持 loopback HTTP 关闭。部署流水线会在覆盖服务配置前校验 HTTPS API 根地址。
 
 ## 迁移步骤
 
-本次未连接生产数据库。上线时由负责部署的会话执行：
+2026-10-02 已只读确认生产 Alembic 版本为 002，存在 28 位患者、42 条病例；不自动认领历史组织归属。
+部署前后应执行：
 
 1. 备份数据库并检查 `uv run --frozen alembic current`。没有 Alembic 版本记录的旧库需先核实 schema，不得猜测 stamp，也不重建/清空数据库。
-2. 停止旧版本写入，安装锁定依赖，配置验票地址及医生组织绑定。
+2. 停止旧版本写入，安装锁定依赖，配置验票地址及医生组织绑定。CI 在迁移前生成受限权限的
+   `backups/pre-migration-<commit>-<UTC时间>.dump`，并用 pg_restore --list 检查备份可读；失败时中止迁移。
 3. 执行 `uv run --frozen alembic upgrade head`，确认 head 为 `003_org_medical_upload` 后启动新应用。
 4. 检查组织 A/B、legacy 的访问及专用上传票据；旧客户端需要完成取票接入。
 
@@ -99,7 +104,8 @@ https://github.com/HuanyuTechTeam/Apkio/blob/main/docs/ORG_AUTH_JOINT_DEBUG.md
 
 后续真机复验：取票/上传成功；票据签发后 logout、业务会话 replaced/revoked、设备解绑、密钥吊销、组织/账号/License 停用后，下一次验票及上传失败（401 或 403）。已通过验票且执行中的事务按协议不追溯取消。
 
-没有遗留协议实现疑问；以上联合状态变更和客户端队列行为需主会话复核。没有合并、部署、发布或手动触发 workflow。
+没有遗留协议实现疑问。main 合并会运行测试、镜像构建、数据库备份、迁移及部署；客户端安装包仍需单独发布。
+部署保留原数据库卷和上一版应用镜像，不执行服务器范围的镜像清理。数据库已迁移后不能只切回旧镜像作为回滚。
 
 ## 本机清理
 
