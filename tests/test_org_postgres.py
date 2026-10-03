@@ -36,7 +36,7 @@ from app.services.medical_record_service import MedicalRecordService
 from main import app
 from tests.org_helpers import principal, upload_body
 
-HEAD = "004_diagnosis_result_text"
+HEAD = "005_consultation"
 PREVIOUS = "002_add_apkio_doctor_bindings"
 MODELS = (Patient, PatientMedicalRecord, PreDiagnosisRecord, SanzhenAnalysisResult)
 

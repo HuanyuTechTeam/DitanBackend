@@ -16,6 +16,9 @@ from app.models.chat import (
     ChatConversation,
     ChatMessage,
 )
+from app.models.consultation import (
+    Consultation, ConsultationTurn, ConsultationMessage, ConsultationLLMCall,
+)
 
 __all__ = [
     "Gender",
@@ -33,4 +36,8 @@ __all__ = [
     "MessageRole",
     "ChatConversation",
     "ChatMessage",
+    "Consultation",
+    "ConsultationTurn",
+    "ConsultationMessage",
+    "ConsultationLLMCall",
 ]
