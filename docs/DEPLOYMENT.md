@@ -165,6 +165,8 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4 --timeout-gracefu
 ### 问诊 SSE 与关闭时限（T12）
 
 问诊复用现有 AI_API_KEY、AI_BASE_URL、AI_MODEL_NAME，使用两条 system / user 消息。
+提问请求显式发送 `thinking.type=disabled`（OpenAI SDK 的 extra_body），与当前 DeepSeek 配置匹配；
+报告不设置 thinking，沿用服务端默认模式。切换其他 OpenAI 兼容供应商时需核对该扩展参数的支持情况。
 问题与报告独立限制并发；每类排队最多等待 10 秒。排队等待不计入首 token 或生成时限，
 排队超时不累计问题模型熔断失败数。问题首 token 时限 10 秒、生成时限 30 秒；
 报告生成及一次首 token 前重试共用 150 秒时限。轮次任务和数据库 deadline 仍按 API 协议执行。

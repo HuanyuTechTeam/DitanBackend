@@ -83,6 +83,7 @@ async def test_openai_request_parameters_and_usage():
     assert await collect(llm.stream_question(item)) == "问候"
     assert sdk.options == {"max_retries": 0, "timeout": 30}
     assert sdk.request["max_tokens"] == 150
+    assert sdk.request["extra_body"] == {"thinking": {"type": "disabled"}}
     assert "temperature" not in sdk.request
     assert sdk.request["messages"] == item.messages
     assert len(sdk.request["messages"]) == 2
@@ -92,6 +93,7 @@ async def test_openai_request_parameters_and_usage():
     assert llm.logs[0][2]["first_token_ms"] is not None
     await collect(llm.stream_report(item))
     assert "max_tokens" not in sdk.request and "temperature" not in sdk.request
+    assert "extra_body" not in sdk.request
 
 
 @pytest.mark.parametrize(

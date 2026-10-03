@@ -67,7 +67,11 @@ class OpenAITransport:
         self.model_name = client.model_name
 
     async def stream(self, prompt: Prompt, purpose: str, timeout: float, usage: Usage):
-        options: dict[str, Any] = {"max_tokens": 150} if purpose == "question" else {}
+        options: dict[str, Any] = (
+            {"max_tokens": 150, "extra_body": {"thinking": {"type": "disabled"}}}
+            if purpose == "question"
+            else {}
+        )
         response = await self.client.async_client.with_options(
             max_retries=0, timeout=timeout
         ).chat.completions.create(

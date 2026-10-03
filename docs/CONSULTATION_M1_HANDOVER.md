@@ -318,6 +318,33 @@ per-purpose concurrency: 8
 
 全量测试使用本次一次性 PostgreSQL 数据库和假模型。Compose 仅做配置解析，没有启动或部署业务服务。
 
-真实模型手工冒烟：已获授权，仅使用合成资料。目前本机进程与 Ditan 本地 .env 中缺少
-AI_BASE_URL / AI_API_KEY，等待所有者提供现有配置路径或补齐本地配置；尚未执行真实请求。
-T9 继续等待所有者提供脱敏样本。
+### 真实模型手工冒烟
+
+所有者提供未跟踪的本地 `.env` 后，2026-10-03 进行两次有界请求；使用同一合成男性资料和
+原 L03 提示词，无真实患者资料，不读写任何数据库。配置中的 `AI_OPENAI_BASE_URL` 仅在冒烟
+进程内映射为后端变量 `AI_BASE_URL`，未打印或提交密钥。实际端点 `https://api.deepseek.com`，
+模型 `deepseek-flash`。正式启动后端时仍需提供其要求的 `AI_BASE_URL`。
+
+两次均通过实际 OpenAITransport 发出 system / user 两条消息，`stream=true`、
+`stream_options={"include_usage":true}`、`max_tokens=150`、SDK `max_retries=0`，未设置 temperature。
+
+| 项目 | 第一次：默认模式 | 第二次：仅提问关闭思考 |
+| --- | --- | --- |
+| UTC 时间 | 2026-10-03 10:00:40 | 2026-10-03 10:03:39 |
+| 结果 | 无正文，被适配器判为空输出失败 | 成功 |
+| 流式正文片段 | 0 | 22 |
+| 正文字数 | 0 | 43 |
+| 首正文耗时 | 无 | 812 ms |
+| 调用总耗时 | 1983 ms | 1030 ms |
+| prompt_tokens / completion_tokens | 653 / 150 | 628 / 22 |
+
+[DeepSeek 官方思考模式文档](https://api-docs.deepseek.com/guides/thinking_mode/)说明该模型默认开启
+思考模式，OpenAI SDK 通过 `extra_body` 控制 thinking。第一次返回 usage 但没有正文；
+所有者据此明确批准对提问增加 `extra_body={"thinking":{"type":"disabled"}}`，报告保留默认模式。
+该参数变更已进入适配器并补充回归：问题发送 disabled，报告不发送 thinking 扩展。
+未修改提示词，没有采集、记录或展示模型思考正文。
+
+结论：实际端点接受两条消息与 stream_options，并能在当前 150 token 上限内流式返回问题正文和 usage。
+这次仅验证接口兼容性，不代替真实业务对照或报告质量审阅。T9 继续等待所有者提供脱敏样本。
+参数修正后再次运行同一全量命令：`333 passed, 8 warnings in 49.26s`；Ruff 通过，
+Mypy 仍为 `Success: no issues found in 96 source files`。
