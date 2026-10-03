@@ -33,7 +33,7 @@
 | `LOG_FILE` | 否 | 默认 `logs/app.log` |
 | `AI_API_KEY` | 是 | OpenAI Compatible API 密钥 |
 | `AI_BASE_URL` | 是 | OpenAI Compatible API 地址 |
-| `AI_MODEL_NAME` | 否 | 默认 `deepseek-chat` |
+| `AI_MODEL_NAME` | 否 | 默认 `deepseek-flash` |
 | `CONSULTATION_LLM_PROVIDER` | 否 | `openai`（默认）或 `fake`；fake 仅用于本地和测试 |
 | `CONSULTATION_LLM_CONCURRENCY` | 否 | 每个进程中每类调用的并发上限，默认 8；问题和报告各有独立信号量 |
 | `APKIO_BASE_URL` | 问诊必填 | Apkio API 根地址，包含 `/api`；问诊始终在线验票 |
@@ -167,6 +167,15 @@ uv run uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4 --timeout-gracefu
 问诊复用现有 AI_API_KEY、AI_BASE_URL、AI_MODEL_NAME，使用两条 system / user 消息。
 提问请求显式发送 `thinking.type=disabled`（OpenAI SDK 的 extra_body），与当前 DeepSeek 配置匹配；
 报告不设置 thinking，沿用服务端默认模式。切换其他 OpenAI 兼容供应商时需核对该扩展参数的支持情况。
+
+模型名使用 `deepseek-flash`（DeepSeek 官方当前模型，默认开启思考模式；`deepseek-chat` 已不在官方模型列表中）。
+代码和 Compose 的默认值已改为 `deepseek-flash`，但生产部署的 `AI_MODEL_NAME` 来自 GitHub Secret，
+需在 Secret 中同样设为 `deepseek-flash`。该变量同时被医生端聊天和 AI 诊断使用：这些原有功能不发送
+thinking 参数，切换后会以默认的思考模式运行：首字会变慢，传入的 temperature 会被静默忽略（不报错），
+思考内容走单独的 `reasoning_content` 字段，现有代码只读取 `content`，功能不受影响。
+
+患者信息中的面舌脉分析若是 JSON，渲染时会去掉设备原始采样序列（20 个以上数字组成的数组，
+如脉诊 `Filtered_data` 波形），保留脉率、浮沉、迟数、虚实等结论；数据库中的 inputs 仍保存原文。
 问题与报告独立限制并发；每类排队最多等待 10 秒。排队等待不计入首 token 或生成时限，
 排队超时不累计问题模型熔断失败数。问题首 token 时限 10 秒、生成时限 30 秒；
 报告生成及一次首 token 前重试共用 150 秒时限。轮次任务和数据库 deadline 仍按 API 协议执行。

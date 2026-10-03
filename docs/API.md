@@ -474,7 +474,7 @@ Apkio token 必须满足：
   "exercise_prescription": "快走 30 分钟，每周 5 次",
   "diagnosis_explanation": "患者以脾失健运、湿困中焦为主。",
   "response_time": 10.5,
-  "model_name": "deepseek-chat",
+  "model_name": "deepseek-flash",
   "created_at": "2026-04-02T08:20:00",
   "updated_at": "2026-04-02T08:20:00"
 }

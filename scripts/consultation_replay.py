@@ -479,7 +479,7 @@ def configure_cli(provider: str, config_path: Path):
     model = (
         os.environ.get("AI_MODEL_NAME")
         or config.get("AI_MODEL_NAME")
-        or "deepseek-chat"
+        or "deepseek-flash"
     )
     if provider == "openai" and (not key or not base):
         raise ValueError(

@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # AI模型配置
     AI_API_KEY: str
     AI_BASE_URL: str
-    AI_MODEL_NAME: str = "deepseek-chat"
+    AI_MODEL_NAME: str = "deepseek-flash"
     CONSULTATION_LLM_PROVIDER: Literal["openai", "fake"] = "openai"
     CONSULTATION_LLM_CONCURRENCY: int = Field(default=8, ge=1)
 
