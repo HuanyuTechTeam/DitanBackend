@@ -2,12 +2,15 @@
 
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
+import json
 from pathlib import Path
 import re
 
 BEIJING = timezone(timedelta(hours=8))
 PLACEHOLDER = re.compile(r"\{\{(.*?)\}\}", re.DOTALL)
 DECLARED = {"USER_INPUT", "output", "input", "messageList"}
+# Shorter numeric lists (scores, coordinates) are kept; device sample series are far longer.
+RAW_SERIES_MIN_LENGTH = 20
 
 
 @lru_cache(maxsize=16)
@@ -86,6 +89,61 @@ def age_on(birthday: str | None, basis: date) -> int | None:
     return None
 
 
+def _is_raw_series(value) -> bool:
+    if isinstance(value, str):
+        text = value.strip()
+        if not (text.startswith("[") and text.endswith("]")):
+            return False
+        try:
+            value = json.loads(text)
+        except ValueError:
+            return False
+    return (
+        isinstance(value, list)
+        and len(value) >= RAW_SERIES_MIN_LENGTH
+        and all(
+            isinstance(item, (int, float)) and not isinstance(item, bool)
+            for item in value
+        )
+    )
+
+
+def _drop_raw_series(value):
+    if isinstance(value, list):
+        return [_drop_raw_series(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    kept = {}
+    for key, item in value.items():
+        if _is_raw_series(item):
+            continue
+        stripped = _drop_raw_series(item)
+        # A container emptied by the removal (e.g. Filtered_data) carries nothing.
+        if isinstance(item, dict) and item and not stripped:
+            continue
+        kept[key] = stripped
+    return kept
+
+
+def strip_raw_series(text: str) -> str:
+    """Remove device sample series, such as the pulse ``Filtered_data`` waveforms.
+
+    They mean nothing to the language model yet were ~90% of every prompt and
+    pushed the question to ask far from the instructions. The stored inputs keep
+    the original text; non-JSON text and JSON without such series are unchanged.
+    """
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return text
+    if not isinstance(data, (dict, list)):
+        return text
+    stripped = _drop_raw_series(data)
+    if stripped == data:
+        return text
+    return json.dumps(stripped, ensure_ascii=False, separators=(",", ":"))
+
+
 def render_patient(inputs: dict, basis: date) -> str:
     patient = inputs.get("patient") or {}
     age = age_on(patient.get("birthday"), basis)
@@ -113,7 +171,7 @@ def render_patient(inputs: dict, basis: date) -> str:
         assessment = assessments.get(key) or {}
         value = assessment.get("text") or ""
         if value.strip():
-            sections.append(f"[{title}]\n{value.strip()}")
+            sections.append(f"[{title}]\n{strip_raw_series(value.strip())}")
     return "\n\n".join(sections)
 
 

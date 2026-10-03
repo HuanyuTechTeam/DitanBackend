@@ -1,5 +1,6 @@
 from collections import Counter
 from datetime import date, datetime, timezone
+import json
 from pathlib import Path
 import re
 
@@ -173,6 +174,37 @@ def test_patient_rendering_and_beijing_basis():
         "- 体重: 70kg\n- 目标体重: 60kg\n\n[面部情况分析]\n面部\n\n"
         "[舌象（舌下）分析]\n舌下\n\n[脉象情况分析]\n脉象"
     )
+
+
+def test_raw_device_series_are_removed_from_patient_input():
+    wave = str(list(range(1700, 1500, -1)))
+    pulse = json.dumps(
+        {
+            "chenfu_right": {"chenfu_ychi": ["沉脉"]},
+            "Filtered_data": {"youchimid": wave, "youcunmid": wave},
+            "pulse_rate": "60",
+            "xushi_right": {"xushi_ychi": ["实脉"]},
+            "scores": [0.5, 0.2, 0.3],
+            "native_series": list(range(40)),
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    stripped = rendering.strip_raw_series(pulse)
+    assert json.loads(stripped) == {
+        "chenfu_right": {"chenfu_ychi": ["沉脉"]},
+        "pulse_rate": "60",
+        "xushi_right": {"xushi_ychi": ["实脉"]},
+        "scores": [0.5, 0.2, 0.3],
+    }
+    assert len(stripped) < len(pulse) // 4
+    tongue = '{"code":88,"data":{"tizhi":{"qixu":0.39},"char":"舌质淡红"}}'
+    for unchanged in ("脉象平和", tongue, '"text"', "[1, 2, 3]"):
+        assert rendering.strip_raw_series(unchanged) == unchanged
+    rendered = rendering.render_patient(
+        {"patient": {}, "assessments": {"pulse": {"text": pulse}}}, date(2026, 1, 1)
+    )
+    assert "Filtered_data" not in rendered and "沉脉" in rendered
 
 
 def test_transcript_order_and_archive_format():
