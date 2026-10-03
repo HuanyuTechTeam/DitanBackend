@@ -20,7 +20,9 @@ x-app-environment: &app_environment
   # AI模型配置
   AI_API_KEY: ${AI_API_KEY}
   AI_BASE_URL: ${AI_BASE_URL}
-  AI_MODEL_NAME: ${AI_MODEL_NAME:-deepseek-chat}
+  AI_MODEL_NAME: ${AI_MODEL_NAME:-deepseek-flash}
+  CONSULTATION_LLM_PROVIDER: ${CONSULTATION_LLM_PROVIDER:-openai}
+  CONSULTATION_LLM_CONCURRENCY: ${CONSULTATION_LLM_CONCURRENCY:-8}
 
   # JWT
   JWT_SECRET_KEY: ${JWT_SECRET_KEY}
@@ -79,6 +81,7 @@ services:
     image: ${IMAGE_REGISTRY:-docker.huanyufuture.top}/ditan-backend:${IMAGE_TAG:-latest}
     container_name: ditan_backend
     restart: unless-stopped
+    stop_grace_period: 130s
     ports:
       - "${APP_PORT:-8000}:8000"
     environment: *app_environment

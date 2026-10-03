@@ -15,13 +15,14 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from httpx import ASGITransport, AsyncClient
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.exc import IntegrityError
 
-from app.core.database import Base
+from app.core.database import Base, get_db
 from app.core.exceptions import DuplicateException
 from app.core.organization import OrganizationContext
 from app.models import (
@@ -32,9 +33,10 @@ from app.models import (
 )
 from app.schemas.patient import MedicalRecordCreate
 from app.services.medical_record_service import MedicalRecordService
+from main import app
 from tests.org_helpers import principal, upload_body
 
-HEAD = "003_org_medical_upload"
+HEAD = "005_consultation"
 PREVIOUS = "002_add_apkio_doctor_bindings"
 MODELS = (Patient, PatientMedicalRecord, PreDiagnosisRecord, SanzhenAnalysisResult)
 
@@ -235,6 +237,100 @@ async def test_empty_database_upgrade_matches_models(pg_engine):
     await migrate(pg_engine, "base", downgrade=True)
     await migrate(pg_engine)
     assert await row_counts(pg_engine) == [0, 0, 0, 0]
+
+
+async def test_upload_preserves_3000_character_diagnosis_result(
+    pg_engine, monkeypatch, verifier
+):
+    await migrate(pg_engine)
+    session_maker = async_sessionmaker(pg_engine, expire_on_commit=False)
+
+    async def override_get_db():
+        async with session_maker() as session:
+            try:
+                yield session
+                await session.commit()
+            except BaseException:
+                await session.rollback()
+                raise
+
+    monkeypatch.setitem(app.dependency_overrides, get_db, override_get_db)
+    body = upload_body()
+    report = "测试诊断结果" * 500
+    body["pre_diagnosis"]["sanzhen_analysis"]["diagnosis_result"] = report
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/medical-record",
+            json=body,
+            headers={"Authorization": "Bearer upload-a"},
+        )
+        assert response.status_code == 201, response.text
+        result = response.json()
+        assert result["success"] is True
+        data = result["data"]
+        assert data["pre_diagnosis"]["sanzhen_result"]["diagnosis_result"] == report
+
+        # Repeating the same upload still returns the original record and full text.
+        replay = await client.post(
+            "/api/v1/medical-record",
+            json=body,
+            headers={"Authorization": "Bearer upload-a"},
+        )
+        assert replay.status_code == 201, replay.text
+        assert replay.json()["data"] == data
+
+    # A fresh session must read the committed text, not an in-memory response value.
+    async with session_maker() as session:
+        stored = await MedicalRecordService(
+            session, OrganizationContext("org-a")
+        ).get_complete_record(data["record_id"])
+        assert stored["pre_diagnosis"]["sanzhen_result"]["diagnosis_result"] == report
+    assert await row_counts(pg_engine) == [1, 1, 1, 1]
+
+
+@pytest.mark.parametrize(
+    "report",
+    [None, "", "测试诊断结果", "甲" * 1024, "测试诊断结果" * 500],
+    ids=["null", "empty", "short", "limit", "long"],
+)
+async def test_diagnosis_result_migration_round_trip(pg_engine, report):
+    await migrate(pg_engine)
+    body = upload_body()
+    body["pre_diagnosis"]["sanzhen_analysis"]["diagnosis_result"] = report
+    await upload(pg_engine, body)
+
+    await migrate(pg_engine, "003_org_medical_upload", downgrade=True)
+    async with pg_engine.connect() as conn:
+        columns = await conn.run_sync(
+            lambda connection: sa.inspect(connection).get_columns(
+                "sanzhen_analysis_results"
+            )
+        )
+        column = next(c for c in columns if c["name"] == "diagnosis_result")
+        assert isinstance(column["type"], sa.VARCHAR)
+        assert column["type"].length == 1024
+        assert column["nullable"] is True
+        stored = await conn.scalar(sa.select(SanzhenAnalysisResult.diagnosis_result))
+        assert stored == (report[:1024] if report is not None else None)
+
+    before = await snapshot(pg_engine)
+    await migrate(pg_engine)
+    after = await snapshot(pg_engine)
+    for table in before:
+        if table != "alembic_version":
+            assert after[table] == before[table]
+    async with pg_engine.connect() as conn:
+        columns = await conn.run_sync(
+            lambda connection: sa.inspect(connection).get_columns(
+                "sanzhen_analysis_results"
+            )
+        )
+        column = next(c for c in columns if c["name"] == "diagnosis_result")
+        assert isinstance(column["type"], sa.Text)
+        assert column["nullable"] is True
 
 
 @pytest.mark.parametrize("uniqueness_style", ["index", "constraint", "both"])

@@ -47,6 +47,9 @@ backups/
 *.db
 *.sqlite3
 
+# Deidentified clinical replay data and review reports stay local, never in Git.
+.consultation-data/
+
 # Testing
 .pytest_cache/
 .coverage

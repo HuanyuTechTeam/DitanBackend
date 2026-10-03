@@ -6,9 +6,18 @@ import sys
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+from types import TracebackType
 from typing import Any, Optional
 
 from app.core.config import get_settings
+
+
+def redacted_exception_info(
+    exc: BaseException,
+) -> tuple[type[BaseException], BaseException, TracebackType | None]:
+    """Keep stack locations without logging exception values, causes or contexts."""
+    sanitized = RuntimeError(f"{type(exc).__name__}: exception details redacted")
+    return RuntimeError, sanitized, exc.__traceback__
 
 
 class JSONFormatter(logging.Formatter):

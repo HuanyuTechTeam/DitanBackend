@@ -64,3 +64,25 @@ class ServiceException(BaseAPIException):
 
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_message = "服务处理失败"
+
+
+class ConsultationError(BaseAPIException):
+    """Consultation errors carry a stable code and optional recovery data."""
+
+    def __init__(self, code: str, status_code: int = 409, **data: Any):
+        self.code = code
+        self.status_code = status_code
+        self.data = {"code": code, **data}
+        messages = {
+            "VERSION_CONFLICT": "问诊状态已更新，请刷新后重试",
+            "SESSION_BUSY": "已有进行中的问诊轮次",
+            "TURN_ID_CONFLICT": "轮次编号对应了不同内容",
+            "REPORT_NOT_READY": "当前不能生成报告",
+            "CONSULTATION_CLOSED": "问诊已结束",
+            "AUTH_EXPIRED": "问诊凭证已过期，请重新取票",
+            "AUTH_TOKEN_INVALID": "问诊凭证无效",
+            "AUTH_UNAVAILABLE": "问诊验票服务暂不可用",
+            "NOT_FOUND": "问诊或轮次不存在",
+            "INVALID_TURN": "当前不接受该轮次或回答内容无效",
+        }
+        super().__init__(messages.get(code, "问诊处理失败"))
