@@ -3,7 +3,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, field_validator
 
 
 class StrictInput(BaseModel):
@@ -11,11 +11,18 @@ class StrictInput(BaseModel):
 
 
 class PatientInput(StrictInput):
-    sex: str | None = None
+    sex: Literal["男", "女"] | None = None
     birthday: str | None = None
     height_cm: FiniteFloat | None = None
     weight_kg: FiniteFloat | None = None
     target_weight_kg: FiniteFloat | None = None
+
+    @field_validator("sex", mode="before")
+    @classmethod
+    def normalize_sex(cls, value):
+        if isinstance(value, str):
+            return {"male": "男", "female": "女"}.get(value.lower(), value)
+        return value
 
 
 class AssessmentInput(StrictInput):

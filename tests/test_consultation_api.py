@@ -3,8 +3,10 @@ from uuid import uuid4
 
 from httpx import ASGITransport, AsyncClient
 import pytest
+from sqlalchemy import select
 
 from app.core.config import get_settings
+from app.models.consultation import Consultation
 from app.services.consultation.llm_fake import Fault
 from app.services.consultation.service import get_service
 from main import app
@@ -13,6 +15,49 @@ from tests.consultation_helpers import consultation_env as consultation_env
 from tests.test_consultation_auth import consultation_verifier as consultation_verifier
 
 ROOT = "/api/v1/consultations"
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("男", "男"),
+        ("女", "女"),
+        ("male", "男"),
+        ("MALE", "男"),
+        ("mAlE", "男"),
+        ("female", "女"),
+        ("FEMALE", "女"),
+        ("FeMaLe", "女"),
+    ],
+)
+async def test_sex_is_normalized_before_storage(
+    consultation_client, consultation_env, value, expected
+):
+    body = payload(sex=value)
+    response = await consultation_client.post(ROOT, json=body)
+    assert response.status_code == 200
+    async with consultation_env.sessions() as db:
+        stored = await db.scalar(
+            select(Consultation).where(
+                Consultation.id == response.json()["data"]["consultation_id"]
+            )
+        )
+        assert stored.inputs["patient"]["sex"] == expected
+
+
+@pytest.mark.parametrize("value", ["OTHER", "unknown", "", "male ", " 男", 1, True, []])
+async def test_invalid_sex_is_rejected(consultation_client, value):
+    response = await consultation_client.post(ROOT, json=payload(sex=value))
+    assert response.status_code == 422
+    assert response.json()["data"]["code"] == "INVALID_REQUEST"
+
+
+@pytest.mark.parametrize("omit", [False, True])
+async def test_optional_sex_keeps_unknown_branch(consultation_client, omit):
+    body = payload(sex=None)
+    if omit:
+        del body["inputs"]["patient"]["sex"]
+    assert (await consultation_client.post(ROOT, json=body)).status_code == 200
 
 
 async def test_smoke_script_with_fake_provider(consultation_client):

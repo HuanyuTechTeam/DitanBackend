@@ -29,6 +29,8 @@
 ```
 
 patient 不包含姓名、电话；assessments 可包含 face、tongue、tongue_down、pulse。
+sex 有值时仅接受“男”“女”，也接受大小写不限的 MALE / FEMALE 并规范化为中文后保存；
+其他非空缺值返回 422 `INVALID_REQUEST`。sex 缺省或为 null 时保留原设计的未知性别处理。
 birthday 可用 YYYY-MM-DD、YYYY/MM/DD 或 YYYYMMDD；缺失、无效或未来日期按年龄未知处理。
 年龄以问诊创建当天的北京时间日期计算。创建时固定 workflow_version；version 为 0 时可替换 inputs，
 开场成功后资料冻结。若开场生成期间资料发生变化，该轮可重试，以新的资料重新生成。

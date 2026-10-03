@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
-from contextlib import aclosing
+from contextlib import aclosing, asynccontextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 import logging
@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 
 class ModelUnavailable(Exception):
     pass
+
+
+class ModelQueueTimeout(ModelUnavailable):
+    """Local admission timeout, not a failure of the model provider."""
 
 
 @dataclass(frozen=True)
@@ -90,6 +94,7 @@ class OpenAITransport:
 
 @dataclass
 class Limits:
+    queue_wait: float = 10
     question_first: float = 10
     question_total: float = 30
     report_total: float = 150
@@ -108,7 +113,8 @@ class ConsultationLLM:
     ):
         self.transport = transport
         self.session_maker = session_maker
-        self.semaphore = asyncio.Semaphore(concurrency)
+        self.question_semaphore = asyncio.Semaphore(concurrency)
+        self.report_semaphore = asyncio.Semaphore(concurrency)
         self.limits = limits or Limits()
         self.question_failures = 0
         self.open_until = 0.0
@@ -116,41 +122,58 @@ class ConsultationLLM:
     async def stream_question(self, prompt: Prompt) -> AsyncGenerator[str, None]:
         if time.monotonic() < self.open_until:
             raise ModelUnavailable("circuit_open")
-        try:
-            async with aclosing(
-                self._attempt(prompt, "question", self.limits.question_total)
-            ) as stream:
-                async for text in stream:
-                    yield text
-        except Exception as exc:
-            self.question_failures += 1
-            if self.question_failures >= self.limits.failure_threshold:
-                self.open_until = time.monotonic() + self.limits.circuit_seconds
-            raise ModelUnavailable(type(exc).__name__) from None
-        else:
-            self.question_failures = 0
-            self.open_until = 0
-
-    async def stream_report(self, prompt: Prompt) -> AsyncGenerator[str, None]:
-        deadline = asyncio.get_running_loop().time() + self.limits.report_total
-        for retry in range(2):
-            emitted = False
+        async with self._slot(self.question_semaphore):
+            # Other calls may have opened the circuit while this request was queued.
+            if time.monotonic() < self.open_until:
+                raise ModelUnavailable("circuit_open")
             try:
-                remaining = deadline - asyncio.get_running_loop().time()
                 async with aclosing(
-                    self._attempt(prompt, "report", remaining)
+                    self._attempt(prompt, "question", self.limits.question_total)
                 ) as stream:
                     async for text in stream:
-                        emitted = True
                         yield text
-                return
             except Exception as exc:
-                if (
-                    emitted
-                    or retry == 1
-                    or asyncio.get_running_loop().time() >= deadline
-                ):
-                    raise ModelUnavailable(type(exc).__name__) from None
+                self.question_failures += 1
+                if self.question_failures >= self.limits.failure_threshold:
+                    self.open_until = time.monotonic() + self.limits.circuit_seconds
+                raise ModelUnavailable(type(exc).__name__) from None
+            else:
+                self.question_failures = 0
+                self.open_until = 0
+
+    async def stream_report(self, prompt: Prompt) -> AsyncGenerator[str, None]:
+        async with self._slot(self.report_semaphore):
+            deadline = asyncio.get_running_loop().time() + self.limits.report_total
+            for retry in range(2):
+                emitted = False
+                try:
+                    remaining = deadline - asyncio.get_running_loop().time()
+                    async with aclosing(
+                        self._attempt(prompt, "report", remaining)
+                    ) as stream:
+                        async for text in stream:
+                            emitted = True
+                            yield text
+                    return
+                except Exception as exc:
+                    if (
+                        emitted
+                        or retry == 1
+                        or asyncio.get_running_loop().time() >= deadline
+                    ):
+                        raise ModelUnavailable(type(exc).__name__) from None
+
+    @asynccontextmanager
+    async def _slot(self, semaphore: asyncio.Semaphore):
+        try:
+            async with asyncio.timeout(self.limits.queue_wait):
+                await semaphore.acquire()
+        except TimeoutError:
+            raise ModelQueueTimeout("queue_timeout") from None
+        try:
+            yield
+        finally:
+            semaphore.release()
 
     async def _attempt(self, prompt: Prompt, purpose: str, total: float):
         started = time.monotonic()
@@ -167,21 +190,18 @@ class ConsultationLLM:
         status, error = "failed", None
         try:
             async with asyncio.timeout_at(first_deadline) as timer:
-                async with self.semaphore:
-                    stream = self.transport.stream(prompt, purpose, total, usage)
-                    try:
-                        async for text in stream:
-                            if not text:
-                                continue
-                            if first_token_ms is None:
-                                first_token_ms = int(
-                                    (time.monotonic() - started) * 1000
-                                )
-                                timer.reschedule(deadline)
-                            chunks.append(text)
-                            yield text
-                    finally:
-                        await stream.aclose()
+                stream = self.transport.stream(prompt, purpose, total, usage)
+                try:
+                    async for text in stream:
+                        if not text:
+                            continue
+                        if first_token_ms is None:
+                            first_token_ms = int((time.monotonic() - started) * 1000)
+                            timer.reschedule(deadline)
+                        chunks.append(text)
+                        yield text
+                finally:
+                    await stream.aclose()
                 if not "".join(chunks).strip():
                     raise ModelUnavailable("empty_output")
                 status = "succeeded"

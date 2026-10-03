@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from app.api import api_v1_router
 from app.core.upload_audit import MedicalUploadAuditMiddleware
 from app.core.exceptions import ConsultationError
+from app.core.logging import redacted_exception_info
 from app.core import (
     get_settings,
     init_db,
@@ -152,7 +153,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def general_exception_handler(request: Request, exc: Exception):
     """处理未捕获的异常"""
     if is_consultation_request(request):
-        logger.error("Consultation request failed")
+        logger.exception(
+            "Consultation request failed", exc_info=redacted_exception_info(exc)
+        )
         return JSONResponse(
             status_code=500,
             content={

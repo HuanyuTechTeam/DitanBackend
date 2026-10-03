@@ -5,6 +5,8 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
 import logging
 
+from app.core.logging import redacted_exception_info
+
 logger = logging.getLogger(__name__)
 Key = tuple[str, str, int]
 
@@ -74,9 +76,10 @@ class TurnRunner:
                     "error", {"code": "TURN_INTERRUPTED", "retryable": True}
                 )
                 raise
-            except Exception:
-                logger.error(
+            except Exception as exc:
+                logger.exception(
                     "Consultation task failed",
+                    exc_info=redacted_exception_info(exc),
                     extra={
                         "extra_data": {
                             "consultation_id": key[0],

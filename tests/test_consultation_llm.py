@@ -11,6 +11,7 @@ from app.services.consultation.llm import (
     ConsultationLLM,
     Limits,
     ModelUnavailable,
+    ModelQueueTimeout,
     OpenAITransport,
     Prompt,
 )
@@ -168,6 +169,78 @@ async def test_concurrency_limits_actual_calls():
     llm = RecordingLLM(transport, concurrency=2)
     await asyncio.gather(*(collect(llm.stream_question(prompt())) for _ in range(6)))
     assert transport.peak == 2 and transport.active == 0
+
+
+async def test_full_report_capacity_does_not_trip_question_circuit():
+    class BusyReports(FakeTransport):
+        def __init__(self):
+            super().__init__()
+            self.report_count = 0
+            self.full = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def stream(self, item, purpose, timeout, usage):
+            if purpose == "report":
+                self.report_count += 1
+                if self.report_count == 2:
+                    self.full.set()
+                await self.release.wait()
+                yield "报告"
+            else:
+                async for text in super().stream(item, purpose, timeout, usage):
+                    yield text
+
+    transport = BusyReports()
+    llm = RecordingLLM(
+        transport, concurrency=2, limits=Limits(question_first=0.02, queue_wait=0.05)
+    )
+    reports = [
+        asyncio.create_task(collect(llm.stream_report(prompt()))) for _ in range(2)
+    ]
+    try:
+        await asyncio.wait_for(transport.full.wait(), 1)
+        for _ in range(4):
+            assert (
+                await collect(llm.stream_question(prompt())) == "【假问题】固定问题？"
+            )
+        assert llm.question_failures == 0 and llm.open_until == 0
+        assert len(transport.calls) == 4
+    finally:
+        transport.release.set()
+        await asyncio.gather(*reports)
+
+
+async def test_question_first_token_clock_starts_after_queue():
+    llm = RecordingLLM(
+        FakeTransport(),
+        concurrency=1,
+        limits=Limits(question_first=0.02, question_total=0.05, queue_wait=0.5),
+    )
+    await llm.question_semaphore.acquire()
+    waiting = asyncio.create_task(collect(llm.stream_question(prompt())))
+    try:
+        await asyncio.sleep(0.07)
+        assert not waiting.done()
+    finally:
+        llm.question_semaphore.release()
+    assert await waiting == "【假问题】固定问题？"
+    assert llm.question_failures == 0
+
+
+async def test_queue_timeouts_do_not_count_as_provider_failures():
+    transport = FakeTransport()
+    llm = RecordingLLM(transport, concurrency=1, limits=Limits(queue_wait=0.01))
+    llm.question_failures = 2
+    await llm.question_semaphore.acquire()
+    try:
+        for _ in range(4):
+            with pytest.raises(ModelQueueTimeout):
+                await collect(llm.stream_question(prompt()))
+        assert llm.question_failures == 2 and llm.open_until == 0
+        assert transport.calls == [] and llm.logs == []
+    finally:
+        llm.question_semaphore.release()
+    assert await collect(llm.stream_question(prompt())) == "【假问题】固定问题？"
 
 
 async def test_llm_audit_persists_request_response_and_identity(db_session):

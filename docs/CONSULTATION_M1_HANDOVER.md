@@ -282,3 +282,42 @@ M1 后按执行计划停止供所有者审查。T9 需要所有者提供脱敏�
 
 本次只保留源码、测试、原提示词核对 fixture、API/鉴权协议和这份验收记录。
 临时容器、测试数据库、测试产物与本次创建的开发环境在交付前清理；预先存在的共享镜像和 Apkio 环境保留。
+
+## M1 审查修正与 T12（2026-10-03）
+
+所有者已通过 M1 审查，并授权修正后并行执行 T10 / T11，不依赖 T9 的样本回放。
+
+- 问题、报告使用独立信号量，每类采用 `CONSULTATION_LLM_CONCURRENCY` 的进程级上限。
+  排队最多 10 秒，首 token 和生成时限在获得名额后开始；排队超时不累计熔断失败数。
+  新增报告并发占满仍可提问、排队不消耗首 token 时限、排队超时不累计失败的测试。
+- sex 有值时限定“男”“女”，MALE / FEMALE 大小写变体规范化为中文；其他值返回 422。
+  原设计的缺省 / null 未知性别分支保留。新增 18 组 API 输入、规范化存储测试。
+- 问诊兜底和任务异常改为 `logger.exception`，保留栈位置，隐藏异常消息、cause / context，
+  避免把患者内容、提示词或底层异常中的请求内容写入普通日志。新增两处日志脱敏回归。
+- T12 补齐问诊配置、nginx SSE 关闭缓冲与 240 秒读超时、发布顺序、uvicorn 60 秒关闭等待，
+  并在 Compose app 服务设置 `stop_grace_period: 130s`。
+
+验证结果：
+
+```text
+uv run pytest -q -p no:cacheprovider --basetemp=.consultation-review-tmp
+333 passed, 8 warnings in 51.85s
+
+uv run ruff check --no-cache .
+All checks passed!
+
+uv run mypy --cache-dir=nul .
+Success: no issues found in 96 source files
+
+docker compose config --quiet
+exit code 0
+stop_grace_period: 2m10s
+consultation provider: openai
+per-purpose concurrency: 8
+```
+
+全量测试使用本次一次性 PostgreSQL 数据库和假模型。Compose 仅做配置解析，没有启动或部署业务服务。
+
+真实模型手工冒烟：已获授权，仅使用合成资料。目前本机进程与 Ditan 本地 .env 中缺少
+AI_BASE_URL / AI_API_KEY，等待所有者提供现有配置路径或补齐本地配置；尚未执行真实请求。
+T9 继续等待所有者提供脱敏样本。
