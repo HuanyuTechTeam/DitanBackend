@@ -585,3 +585,42 @@ tests/test_consultation_replay.py
 本次没有构建临时镜像，保留原有共享 `postgres:17` 镜像、用户 `.env`、预存日志/缓存和最终脱敏交付物。
 复查各仓库状态：avatarhuman、Apkio、Android 无新增改动，HarmonyOS 仅保留原有且哈希未变的
 `build-profile.json5` 修改；DitanBackend 只提交上述七个文件，没有推送、合并或部署。
+
+## 所有者审查修正（2026-10-04）
+
+审查确认 `ad76268..1c34e55` 的并发隔离、性别校验、日志脱敏和 T12 部署配置符合要求。所有者决定的两项后端调整如下。
+
+### 去掉设备原始采样序列
+
+T9 发现脉诊文本约 2.9 万字，其中约 2.7 万字是 `Filtered_data` 原始波形数组。它每轮都进入 `USER_INPUT`，
+使单次提问约 2 万 token，并把本轮要问的问题挤到用户消息末尾，S001 第 12 轮"是否有孩子"因此偏成了月经问题。
+
+`render_patient` 现在对 JSON 形式的面舌脉分析去掉 20 个以上数字组成的数组（含字符串化的数组），
+清空的容器一并去掉；脉率、浮沉、迟数、虚实和舌象结论保留。非 JSON 文本及不含采样序列的 JSON 原样输出；
+数据库中的 `inputs` 仍保存原文。v1 尚未上线，没有已开始的生产问诊受影响，因此不另起工作流版本。
+
+用同一份脱敏 S001 样本和真实 `deepseek-flash` 重新回放（输出 `.consultation-data/t9/replay-real-nowave/`，仅存本机）：
+
+| 项目 | 去掉前 | 去掉后 |
+| --- | ---: | ---: |
+| S001 `USER_INPUT` 字数 | 约 3.3 万 | 4682 |
+| 16 次调用的输入 token | 339196 | 49095 |
+| 第 12 轮 children | 问成月经 | "您目前有孩子吗？" |
+| 问题降级 | 0 | 0 |
+
+新回放的第 8 轮被关键词规则标为偏题，原文实际在问零食、夜宵和饮料，属于误报；但开头一句"睡眠都挺好"
+与患者此前回答"多梦"不符，留给业务审阅。年龄 32/30 与 33 的差异来自 Coze 提问节点由模型自行推算年龄，
+新后端由代码计算周岁，不需要修改。
+
+### 默认模型改为 deepseek-flash
+
+依据 DeepSeek 官方模型列表，`deepseek-flash` 为当前模型，默认开启思考模式；`deepseek-chat` 已不在列表中。
+`app/core/config.py`、`.env.example`、两份 Compose、README、部署文档、回放脚本和 `TCMDiagnosisService`
+的默认值统一为 `deepseek-flash`（`demo/` 不变）。生产 `AI_MODEL_NAME` 来自 GitHub Secret，需所有者同步设置；
+影响说明见 `docs/DEPLOYMENT.md`。
+
+### 验证
+
+新增 `test_raw_device_series_are_removed_from_patient_input`。一次性 PostgreSQL 17 下全量
+`361 passed`（含 48 项 PostgreSQL 测试）；`ruff check` 通过；`mypy`：`Success: no issues found in 100 source files`。
+两端客户端的审查修正（性别规范化、Android 不可重试错误的待发记录同步）记录在各自仓库。
