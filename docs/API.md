@@ -1,5 +1,92 @@
 # API 文档
 
+## 持久化问诊（v1）
+
+以下新增接口使用 Apkio `POST /api/client/consultation/token` 签发的专用票据：
+`Authorization: Bearer <consultationToken>`。每次请求在线验票，SSE 在建立连接时验票；
+病历上传票据与问诊票据不可混用，问诊不支持匿名兼容模式。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/v1/consultations` | 按机构与 encounter_uuid 创建或获取问诊 |
+| GET | `/api/v1/consultations/{id}` | 获取快照 |
+| POST | `/api/v1/consultations/{id}/turns` | 提交或重新接入一轮，响应 SSE |
+| GET | `/api/v1/consultations/{id}/turns/{turn_id}` | 查询轮次与已提交结果 |
+| POST | `/api/v1/consultations/{id}/abandon` | 幂等放弃并取消进行中轮次 |
+| GET | `/api/v1/consultations/{id}/archive` | 获取 diagnosis_result 与 conversation_log |
+
+创建请求：
+
+```json
+{
+  "encounter_uuid": "550e8400-e29b-41d4-a716-446655440001",
+  "pre_diagnosis_uuid": "660e8400-e29b-41d4-a716-446655440001",
+  "inputs": {
+    "patient": {"sex": "女", "birthday": "1994-05-01", "height_cm": 162, "weight_kg": 70, "target_weight_kg": 60},
+    "assessments": {"face": {"text": "面部分析", "source": "client"}}
+  }
+}
+```
+
+patient 不包含姓名、电话；assessments 可包含 face、tongue、tongue_down、pulse。
+birthday 可用 YYYY-MM-DD、YYYY/MM/DD 或 YYYYMMDD；缺失、无效或未来日期按年龄未知处理。
+年龄以问诊创建当天的北京时间日期计算。创建时固定 workflow_version；version 为 0 时可替换 inputs，
+开场成功后资料冻结。若开场生成期间资料发生变化，该轮可重试，以新的资料重新生成。
+
+成功接口沿用 `{success, message, data}`。快照的 data 包括 consultation_id、encounter_uuid、
+workflow_version、status、version、can_report、messages、pending_turn、report（报告字符串或 null）。
+status 为 collecting / ready_for_report / completed / abandoned。消息按 seq 排序，含 role、kind、
+step_id、content、turn_id 和 meta；仅已提交的完整轮次进入消息列表。
+pending_turn 为进行中或仍可重试的失败轮次；超时的 processing 按 failed 展示。
+轮次查询的 data 包括 turn_id、kind、status、input_text、base_version、attempt、retryable、error_code；
+completed 时额外带 result，其内容等同对应轮次的 completed 事件。
+
+轮次请求：
+
+```json
+{"turn_id":"770e8400-e29b-41d4-a716-446655440001","kind":"answer","base_version":1,"text":"睡眠还行","input_type":"asr"}
+```
+
+kind 为 start / answer / report。回答去掉首尾空白后须为 1～2000 字；start 仅用于 version=0；
+report 仅用于 ready_for_report。报告前继续说话会保存为回答，不会触发报告。
+客户端先保存 turn_id 再发送，重试沿用相同 kind、文本和 turn_id。
+
+SSE 响应包含 `Cache-Control: no-cache`、`X-Accel-Buffering: no`，每 15 秒发送 `: heartbeat` 注释。
+
+```text
+event: accepted
+data: {"turn_id":"…","attempt":1}
+
+event: delta
+data: {"attempt":1,"offset":0,"text":"晚上睡眠好吗？"}
+
+event: completed
+data: {"turn_id":"…","messages":[{"seq":1,"role":"assistant","kind":"start","step_id":"core_history","content":"…","turn_id":"…","meta":{"prompt_version":"v1","fallback":false}}],"consultation":{"version":1,"status":"collecting","can_report":false}}
+```
+
+delta.offset 按 Unicode 码点计数。reset 事件携带 attempt，表示丢弃尚未提交的文字；
+固定问题降级时可额外带 reason=fixed_question。error 携带 code、retryable。
+只有 completed 表示轮次成功；断流不取消执行，可查询轮次或重新提交同一个 turn_id。
+已完成轮次重传只返回 accepted、completed，消息和流程不重复推进。
+其他 worker 接入进行中轮次时查询数据库，等待最终结果；流式缓冲仅在执行进程内保留 60 秒。
+
+受理前失败返回普通 JSON，结构为 `{success:false,message:"…",data:{code:"…"}}`：
+
+| code | HTTP | 补充数据 |
+| --- | --- | --- |
+| VERSION_CONFLICT | 409 | snapshot：最新快照 |
+| SESSION_BUSY | 409 | turn_id：进行中的轮次 |
+| TURN_ID_CONFLICT | 409 | 相同 turn_id 的 kind 或文本不同 |
+| REPORT_NOT_READY / CONSULTATION_CLOSED | 409 | 尚不可报告或问诊已关闭 |
+| INVALID_TURN | 400 / 409 | 回答内容或当前阶段不接受该 kind |
+| INVALID_REQUEST | 422 | 请求结构无效 |
+| AUTH_EXPIRED / AUTH_TOKEN_INVALID | 401 | 重新取票或恢复授权 |
+| AUTH_UNAVAILABLE | 503 | retryable=true |
+| NOT_FOUND | 404 | 不存在或不属于当前机构 |
+
+归档的 conversation_log 按顺序使用 `User: …`、`AI: …`。客户端将其与 diagnosis_result
+写入现有患者草稿，再沿用原病历上传接口；上传 DTO、重传和冲突规则不变。
+
 本文档以当前代码实现为准，覆盖 `app/api/doctor.py`、`app/api/patient.py`、`app/api/chat.py` 中实际暴露的接口。
 
 ## 基础信息
