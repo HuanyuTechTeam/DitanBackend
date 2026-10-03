@@ -36,6 +36,11 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    from app.services.consultation.runner import runner
+    from app.services.consultation.llm import close_llm
+
+    await runner.shutdown(timeout=60)
+    await close_llm()
     logger.info("正在关闭数据库连接...")
     await close_db()
     logger.info("应用已关闭")
