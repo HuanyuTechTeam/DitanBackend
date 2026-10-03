@@ -60,7 +60,10 @@ def test_original_prompts_and_message_split(prompt_id):
     assert rendering.load_prompt(prompt_id) == raw
     system, user = rendering.split_prompt(prompt_id)
     assert "{{" not in system
-    nonempty = lambda text: [line for line in text.splitlines() if line.strip()]
+
+    def nonempty(text):
+        return [line for line in text.splitlines() if line.strip()]
+
     assert Counter(nonempty(system) + nonempty(user)) == Counter(nonempty(raw))
     # Both portions retain the original relative order (L14 has two system segments).
     for portion in (system, user):

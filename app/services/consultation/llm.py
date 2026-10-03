@@ -1,13 +1,15 @@
 """Bounded model calls, process-local admission, circuit breaking and audit."""
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import aclosing
 from dataclasses import dataclass
 from functools import lru_cache
 import logging
 import time
-from typing import Protocol
+from typing import Any, Protocol
+
+from openai.types.chat import ChatCompletionMessageParam
 
 from app.core.config import get_settings
 from app.core.database import async_session_maker
@@ -34,7 +36,7 @@ class Prompt:
     fixed_question: str = ""
 
     @property
-    def messages(self) -> list[dict[str, str]]:
+    def messages(self) -> list[ChatCompletionMessageParam]:
         return [
             {"role": "system", "content": self.system_text},
             {"role": "user", "content": self.user_text},
@@ -52,7 +54,7 @@ class ModelTransport(Protocol):
 
     def stream(
         self, prompt: Prompt, purpose: str, timeout: float, usage: Usage
-    ) -> AsyncIterator[str]: ...
+    ) -> AsyncGenerator[str, None]: ...
 
 
 class OpenAITransport:
@@ -61,7 +63,7 @@ class OpenAITransport:
         self.model_name = client.model_name
 
     async def stream(self, prompt: Prompt, purpose: str, timeout: float, usage: Usage):
-        options = {"max_tokens": 150} if purpose == "question" else {}
+        options: dict[str, Any] = {"max_tokens": 150} if purpose == "question" else {}
         response = await self.client.async_client.with_options(
             max_retries=0, timeout=timeout
         ).chat.completions.create(
@@ -111,7 +113,7 @@ class ConsultationLLM:
         self.question_failures = 0
         self.open_until = 0.0
 
-    async def stream_question(self, prompt: Prompt) -> AsyncIterator[str]:
+    async def stream_question(self, prompt: Prompt) -> AsyncGenerator[str, None]:
         if time.monotonic() < self.open_until:
             raise ModelUnavailable("circuit_open")
         try:
@@ -129,7 +131,7 @@ class ConsultationLLM:
             self.question_failures = 0
             self.open_until = 0
 
-    async def stream_report(self, prompt: Prompt) -> AsyncIterator[str]:
+    async def stream_report(self, prompt: Prompt) -> AsyncGenerator[str, None]:
         deadline = asyncio.get_running_loop().time() + self.limits.report_total
         for retry in range(2):
             emitted = False
@@ -228,9 +230,11 @@ class ConsultationLLM:
             logger.warning(
                 "Consultation model audit could not be saved",
                 extra={
-                    "consultation_id": prompt.consultation_id,
-                    "turn_id": prompt.turn_id,
-                    "attempt": prompt.attempt,
+                    "extra_data": {
+                        "consultation_id": prompt.consultation_id,
+                        "turn_id": prompt.turn_id,
+                        "attempt": prompt.attempt,
+                    }
                 },
             )
 
@@ -238,6 +242,7 @@ class ConsultationLLM:
 @lru_cache(maxsize=1)
 def get_llm() -> ConsultationLLM:
     settings = get_settings()
+    transport: ModelTransport
     if settings.CONSULTATION_LLM_PROVIDER == "fake":
         from app.services.consultation.llm_fake import FakeTransport
 

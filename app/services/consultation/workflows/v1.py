@@ -44,7 +44,7 @@ class ReportGate:
     text: str = REPORT_GATE_TEXT
 
 
-STEPS = (
+STEPS: tuple[Ask | ReportGate, ...] = (
     Ask("core_history", "L03"),
     Ask("family_health", "L04"),
     Ask("work_stress", "L05"),

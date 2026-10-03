@@ -1,7 +1,7 @@
 """Detached tasks and ephemeral replay buffers; correctness lives in the database."""
 
 import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, field
 import logging
 
@@ -29,7 +29,7 @@ class Buffer:
             self.finished = name in {"completed", "error"}
             self.condition.notify_all()
 
-    async def subscribe(self, heartbeat: float = 15) -> AsyncIterator[Event]:
+    async def subscribe(self, heartbeat: float = 15) -> AsyncGenerator[Event, None]:
         index = 0
         while True:
             heartbeat_due = False
@@ -78,9 +78,11 @@ class TurnRunner:
                 logger.error(
                     "Consultation task failed",
                     extra={
-                        "consultation_id": key[0],
-                        "turn_id": key[1],
-                        "attempt": key[2],
+                        "extra_data": {
+                            "consultation_id": key[0],
+                            "turn_id": key[1],
+                            "attempt": key[2],
+                        }
                     },
                 )
             finally:
@@ -112,12 +114,20 @@ class TurnRunner:
 
     async def shutdown(self, timeout: float = 60):
         self.closing = True
+        deadline = asyncio.get_running_loop().time() + timeout
         if self.tasks:
-            _, pending = await asyncio.wait(list(self.tasks), timeout=timeout)
+            # Reserve a bounded part of the same shutdown budget for cancellation cleanup.
+            grace = min(1, timeout / 5)
+            _, pending = await asyncio.wait(
+                list(self.tasks), timeout=max(0, timeout - grace)
+            )
             for task in pending:
                 task.cancel()
             if pending:
-                await asyncio.gather(*pending, return_exceptions=True)
+                await asyncio.wait(
+                    pending,
+                    timeout=max(0, deadline - asyncio.get_running_loop().time()),
+                )
         for handle in self.cleanup_handles.values():
             handle.cancel()
         self.cleanup_handles.clear()

@@ -29,9 +29,10 @@ class RequestContext:
         self.doctor = doctor
         self.upload = upload
         self.consultation = consultation
+        principal = upload or consultation
         self._organization = (
-            (upload or consultation).organization
-            if upload or consultation
+            principal.organization
+            if principal is not None
             else (
                 OrganizationContext(
                     doctor.apkio_org_id

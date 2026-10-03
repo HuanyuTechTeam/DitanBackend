@@ -94,8 +94,10 @@ def verification_url(path: str = "/client/medical-upload/current") -> str:
 
 async def verify_upload_token(token: str) -> UploadPrincipal:
     return await verify_token(
-        token, path="/client/medical-upload/current",
-        audience="ditan-medical-upload", scope="medical-record:write",
+        token,
+        path="/client/medical-upload/current",
+        audience="ditan-medical-upload",
+        scope="medical-record:write",
     )
 
 

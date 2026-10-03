@@ -57,6 +57,11 @@ async def test_turn_identity_and_completed_replay(consultation_env):
         env.ctx, snapshot["consultation_id"], {**answer, "text": "回答"}
     )
     assert handle.result is not None
+    with pytest.raises(ConsultationError) as conflict:
+        await env.service.submit_turn(
+            env.ctx, snapshot["consultation_id"], {**answer, "text": "不同的回答"}
+        )
+    assert conflict.value.code == "TURN_ID_CONFLICT"
     assert (await env.service.get_snapshot(env.ctx, snapshot["consultation_id"]))[
         "version"
     ] == 2

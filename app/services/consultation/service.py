@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.database import async_session_maker
 from app.core.exceptions import ConsultationError
+from app.repositories.consultation_repository import ConsultationRepository
 from app.models.consultation import (
     Consultation,
     ConsultationMessage,
@@ -26,7 +27,7 @@ from app.services.consultation.rendering import (
     render_patient,
     render_prompt,
 )
-from app.services.consultation.runner import Buffer, Event, TurnRunner, runner
+from app.services.consultation.runner import Event, TurnRunner, runner
 from app.services.consultation.workflows import get_workflow
 
 logger = logging.getLogger(__name__)
@@ -81,39 +82,21 @@ class ConsultationService:
         self.heartbeat = heartbeat
 
     async def _consultation(self, db, org_id, consultation_id, *, lock=True):
-        query = select(Consultation).where(
-            Consultation.org_id == org_id, Consultation.id == consultation_id
-        )
-        if lock:
-            query = query.with_for_update()
-        value = await db.scalar(query.execution_options(populate_existing=True))
+        value = await ConsultationRepository(db, org_id).get(consultation_id, lock=lock)
         if value is None:
             raise ConsultationError("NOT_FOUND", 404)
         return value
 
     async def _turn(self, db, org_id, consultation_id, turn_id):
-        return await db.scalar(
-            select(ConsultationTurn)
-            .where(
-                ConsultationTurn.org_id == org_id,
-                ConsultationTurn.consultation_id == consultation_id,
-                ConsultationTurn.turn_id == turn_id,
-            )
-            .execution_options(populate_existing=True)
+        return await ConsultationRepository(db, org_id).get_turn(
+            consultation_id, turn_id
         )
 
     async def _messages(self, db, consultation, turn_id=None):
-        query = (
-            select(ConsultationMessage)
-            .where(
-                ConsultationMessage.org_id == consultation.org_id,
-                ConsultationMessage.consultation_id == consultation.id,
-            )
-            .order_by(ConsultationMessage.seq)
+        messages = await ConsultationRepository(db, consultation.org_id).messages(
+            consultation.id, turn_id
         )
-        if turn_id is not None:
-            query = query.where(ConsultationMessage.turn_id == turn_id)
-        return [message_data(message) for message in (await db.scalars(query)).all()]
+        return [message_data(message) for message in messages]
 
     def _turn_data(self, turn, consultation):
         expired = turn.status == "processing" and aware(turn.deadline_at) <= utcnow()
@@ -243,12 +226,8 @@ class ConsultationService:
             return result
 
     async def _active(self, db, consultation):
-        return await db.scalar(
-            select(ConsultationTurn).where(
-                ConsultationTurn.org_id == consultation.org_id,
-                ConsultationTurn.consultation_id == consultation.id,
-                ConsultationTurn.status == "processing",
-            )
+        return await ConsultationRepository(db, consultation.org_id).active_turn(
+            consultation.id
         )
 
     async def _expire_other(self, db, consultation, turn_id):
@@ -366,6 +345,18 @@ class ConsultationService:
                 org_id, consultation_id, turn_id, turn.attempt, kind, result
             )
         if launch:
+            logger.info(
+                "Consultation turn accepted",
+                extra={
+                    "extra_data": {
+                        "org_id": org_id,
+                        "consultation_id": consultation_id,
+                        "turn_id": turn_id,
+                        "attempt": handle.attempt,
+                        "kind": kind,
+                    }
+                },
+            )
             self.runner.start(
                 (consultation_id, turn_id, handle.attempt),
                 lambda buffer: self._run(handle, buffer),

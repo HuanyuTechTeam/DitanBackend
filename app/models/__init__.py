@@ -17,7 +17,10 @@ from app.models.chat import (
     ChatMessage,
 )
 from app.models.consultation import (
-    Consultation, ConsultationTurn, ConsultationMessage, ConsultationLLMCall,
+    Consultation,
+    ConsultationTurn,
+    ConsultationMessage,
+    ConsultationLLMCall,
 )
 
 __all__ = [

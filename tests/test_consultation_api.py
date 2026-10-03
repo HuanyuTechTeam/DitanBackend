@@ -15,6 +15,14 @@ from tests.test_consultation_auth import consultation_verifier as consultation_v
 ROOT = "/api/v1/consultations"
 
 
+async def test_smoke_script_with_fake_provider(consultation_client):
+    from scripts.consultation_smoke import smoke
+
+    result = await smoke(consultation_client)
+    assert result["disconnect_recovered"]
+    assert result["status"] == "completed" and result["answers"] == 11
+
+
 def parse_events(text):
     result = []
     for frame in text.split("\n\n"):

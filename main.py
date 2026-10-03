@@ -62,13 +62,21 @@ app.include_router(api_v1_router)
 
 @app.exception_handler(ConsultationError)
 async def consultation_exception_handler(request: Request, exc: ConsultationError):
-    return JSONResponse(status_code=exc.status_code, content={
-        "success": False, "message": exc.message, "data": exc.data,
-    }, headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "message": exc.message,
+            "data": exc.data,
+        },
+        headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
+    )
 
 
 def is_consultation_request(request: Request) -> bool:
-    return request.url.path == "/api/v1/consultations" or request.url.path.startswith("/api/v1/consultations/")
+    return request.url.path == "/api/v1/consultations" or request.url.path.startswith(
+        "/api/v1/consultations/"
+    )
 
 
 @app.exception_handler(BaseAPIException)
@@ -103,9 +111,14 @@ async def api_exception_handler(request: Request, exc: BaseAPIException):
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """处理请求验证异常"""
     if is_consultation_request(request):
-        return JSONResponse(status_code=422, content={
-            "success": False, "message": "问诊请求参数无效", "data": {"code": "INVALID_REQUEST"},
-        })
+        return JSONResponse(
+            status_code=422,
+            content={
+                "success": False,
+                "message": "问诊请求参数无效",
+                "data": {"code": "INVALID_REQUEST"},
+            },
+        )
     if hasattr(request.state, "request_id"):
         request.state.upload_failure_code = "UPLOAD_VALIDATION_ERROR"
         return JSONResponse(
@@ -140,9 +153,14 @@ async def general_exception_handler(request: Request, exc: Exception):
     """处理未捕获的异常"""
     if is_consultation_request(request):
         logger.error("Consultation request failed")
-        return JSONResponse(status_code=500, content={
-            "success": False, "message": "问诊服务处理失败", "data": {"code": "INTERNAL_ERROR"},
-        })
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "message": "问诊服务处理失败",
+                "data": {"code": "INTERNAL_ERROR"},
+            },
+        )
     if hasattr(request.state, "request_id"):
         request.state.upload_failure_code = "UPLOAD_FAILED"
         return JSONResponse(
