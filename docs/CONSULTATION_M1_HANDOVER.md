@@ -1,5 +1,9 @@
 # 问诊后端迁移 M1 交接记录
 
+进度更新（2026-10-04）：T0～T12 的代码与自动化验证已完成，T9 已用两条真实脱敏样本完成回放。
+对照发现一处新模型提问偏题和旧对话年龄表述不一致，详见文末 T9 记录；M2 的模型效果业务审阅、
+M3/M4 的真机验收仍待完成，不能将工具执行成功视为这些验收已通过。
+
 日期：2026-10-03。依据 avatarhuman 的《问诊后端迁移执行计划》与《四诊问诊后端迁移设计》。
 本次范围是 T1～T8；M0 已由所有者确认。两个业务仓库均使用从 main 创建的
 `feature/consultation-backend` 分支，只做本地提交。
@@ -276,8 +280,9 @@ uv run python scripts/consultation_smoke.py --base-url http://127.0.0.1:8000
 
 ## 检查点与后续边界
 
-M1 后按执行计划停止供所有者审查。T9 需要所有者提供脱敏样本；T10/T11 客户端与 T12 部署资料
-不在本次提交中。未访问生产数据库、调用真实模型、修改生产配置、推送、合并或部署。
+M1 初次交付后按执行计划停止供所有者审查。当时 T9 等待所有者提供脱敏样本，T10/T11 客户端与
+T12 部署资料不在该阶段提交中；当时未访问生产数据库、调用真实模型、修改生产配置、推送、合并或部署。
+后续授权、真实模型验证及 T9～T12 的完成情况记录于下文。
 调用日志和已放弃问诊的保留期限仍是设计第 16 节列出的后续产品事项，本轮未自行设定清理期限。
 
 本次只保留源码、测试、原提示词核对 fixture、API/鉴权协议和这份验收记录。
@@ -345,7 +350,7 @@ per-purpose concurrency: 8
 未修改提示词，没有采集、记录或展示模型思考正文。
 
 结论：实际端点接受两条消息与 stream_options，并能在当前 150 token 上限内流式返回问题正文和 usage。
-这次仅验证接口兼容性，不代替真实业务对照或报告质量审阅。T9 继续等待所有者提供脱敏样本。
+这次仅验证接口兼容性，不代替真实业务对照或报告质量审阅。当时 T9 等待脱敏样本，现已完成文末记录的真实回放。
 参数修正后再次运行同一全量命令：`333 passed, 8 warnings in 49.26s`；Ruff 通过，
 Mypy 仍为 `Success: no issues found in 96 source files`。
 
@@ -375,7 +380,7 @@ HarmonyOS 预存 `build-profile.json5` 修改未提交，最终 SHA-256 仍为
 `4BB1BAAAF6977E759DCBDFE415178C3C1D5517ADC3453526CC99B9CC234CDA51`。
 
 源码与部署资料均只在本地 `feature/consultation-backend` 分支提交，没有 push、合并或部署。
-T9 等待脱敏样本；M3 / M4 的真机、实际音视频硬件与完整病历上传验收尚未执行，按两端清单后续验收。
+T9 现已完成文末记录的真实回放；M3 / M4 的真机、实际音视频硬件与完整病历上传验收尚未执行，按两端清单后续验收。
 
 ## 本轮逐文件改动清单
 
@@ -475,3 +480,108 @@ scripts/tests/consultation-regressions.cjs
 scripts/tests/local-unit.test.cjs
 scripts/tests/org-auth.test.cjs
 ```
+
+## T9 真实样本脱敏导出与对照回放（2026-10-03～10-04）
+
+### 数据授权与处理
+
+所有者本轮明确授权通过 `ssh NewPlus` 从服务器 PostgreSQL 提取并脱敏，替代原执行计划中
+“所有者提供样本、代理不访问生产数据库”的前提。本次生产操作仅为有超时限制的只读查询，
+没有修改数据库、部署服务或在服务器保存原始导出文件。
+
+`scripts/consultation_export.py` 通过 SSH 标准输入运行服务器端脱敏程序，在
+`BEGIN TRANSACTION READ ONLY` 内查询，以 `ROLLBACK` 结束；查询超时 10 秒、锁等待 1 秒，
+候选最多 500 条、单批导出最多 20 条，必须显式指定已授权的 SSH 别名。
+数据库凭据只由服务器容器内部环境使用，不输出到终端或交接资料。
+
+字段映射沿用 T9 设计：患者性别、生日来自 `patients`；身高、体重、Coze 对话来自
+`pre_diagnosis_records`；四诊文本和旧报告来自 `sanzhen_analysis_results`；目标体重未知，保持
+`null`。查询通过病历、患者和预诊记录的机构条件关联，不导出原病历、患者或机构标识。
+
+姓名、电话以及自由文本中的已知身份信息、称呼、身份证号、邮箱、链接、UUID、长标识、
+完整时间戳和带标签的地址等均在服务器内替换，再传回本机。使用合成的生日和就诊日期保留周岁；
+年龄基准是病历 `created_at` 按 UTC 解释后转为北京时间的日期，原 Coze 开场时间没有保存，
+因此无法消除原年龄计算方式或实际开场日期造成的偏差。保留原回答和语音识别误差，不补造回答。
+文本规则不能证明彻底不可重识别，脱敏样本和对照报告仍按临床数据保管，只存本机；
+`.gitignore` 与 `.dockerignore` 均排除 `.consultation-data/`，不会提交或打入应用镜像。
+
+生产查询发现 42 条非空对话，其中 40 条有报告，39 条有至少 11 条 `User:` 消息。
+可用样本覆盖成年女性 19 条、成年男性 21 条，没有儿童或青少年样本；本次选择四诊内容较完整、
+回答数量匹配流程的成年女性和男性各一条。现场 `diagnosis_result` 已为 `TEXT`，最长已存报告
+1259 字；原计划所述 1024 字现有限制已不适用，但无法判断更早上传失败造成的样本缺失。
+
+### 工具与执行结果
+
+`scripts/consultation_replay.py` 使用真实 v1 服务、提示词、模型适配器和临时 SQLite 逐轮回放，
+不会连接业务数据库。按日志中最近的 `AI:` 关联原 `User:` 回答，忽略未配对介绍、摘要和
+`Status:` 行；“获取报告”按钮作为报告控制命令处理。缺失回答时输出未完成结果，不强行补齐。
+报告并排保留新旧提问、原回答、新旧报告；同时核对流程节点与新旧问题正文主题，标注可能的
+顺序、分支、年龄、降级和报告格式差异。主题检查采用关键词规则，业务方仍须逐句审阅。
+
+本次命令（在 DitanBackend 下执行；已有输出不会被覆盖）：
+
+```powershell
+uv run python scripts/consultation_export.py --ssh-host NewPlus --container ditan_db --count 2 --output .consultation-data/t9/samples-final.jsonl
+uv run python scripts/consultation_replay.py --samples .consultation-data/t9/samples-final.jsonl --output-dir .consultation-data/t9/replay-real --provider openai --limit 2
+```
+
+真实回放从本机 `.env` 读取模型配置，兼容 `AI_OPENAI_BASE_URL` 到 `AI_BASE_URL` 的映射。
+使用 `deepseek-flash`，提问关闭思考、报告保留默认模式，沿用已获同意的调整；没有修改 v1 提示词。
+不在此记录密钥或患者正文。
+
+| 样本 | 分支 | 原回答数 | 模型调用 | 问题降级 | 供应商 input / output tokens | 执行状态 |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| S001 | 成年女性，33 岁 | 15 | 16 | 0 | 339196 / 6988 | 完成并生成报告 |
+| S002 | 成年男性，30 岁 | 11 | 12 | 0 | 249892 / 7609 | 完成并生成报告 |
+
+合计 28 次真实模型调用，供应商返回用量为 589088 input / 14597 output tokens。
+样本文件 SHA-256：`9eeab17539274175fdbee9f2fa505783bd14fb9d3cf23e758ee8b331b9d74a3e`。
+
+本机交付文件：
+
+- `.consultation-data/t9/samples-final.jsonl`、`samples-final.summary.json`：脱敏样本与导出摘要。
+- `.consultation-data/t9/replay-real/README.md`：报告索引与审阅重点。
+- `.consultation-data/t9/replay-real/S001.md`、`S002.md`：逐轮提问和最终报告对照。
+- `.consultation-data/t9/replay-real/summary.json`：执行结果、差异标记与用量。
+
+### 发现与验收边界
+
+1. S001 第 12 轮的流程节点是 `children`，但新模型正文问了月经；原回答针对生育问题，
+   因而这处偏题可能影响后续报告的语义。流程节点顺序正确不能证明正文主题正确。
+2. S001 的旧 Coze 问题先后提到 32 岁和 30 岁，按病历日期计算为 33 岁；原开场时间、
+   旧年龄算法或模型表述可能存在差异，现有记录不足以归因。
+3. S002 未检出主题或分支差异；这是规则检查结果，不代表报告医学内容已获业务认可。
+   两条成年样本也不能代表儿童、青少年、未知年龄等全部分支的真实效果。
+
+人工核对发现第 1 项后补充了新问题正文的主题检查及回归测试，并对同一次真实输出重新标注；
+`summary.json` 标明 `analysis_version: 2`、`model_outputs_regenerated: false`。
+重新标注保留原问题、原回答和报告正文，没有再次调用模型、筛选更好的输出或改写 v1 提示词。
+T9 的“至少一条真实样本跑通并提供报告”已完成；M2 仍需业务方审阅这些差异，再决定是否通过
+或另行发布 v2 提示词/增加模型输出约束。
+
+### 验证与文件清单
+
+新增 27 项自动化测试，覆盖脱敏、保龄日期、只读导出、错误不回显源数据、多行日志解析、
+真实服务的假模型回放、回答不足、分支/主题差异、降级以及报告失败。测试不访问真实 HTTP 或 SSH。
+全量 `pytest tests -q -p no:cacheprovider --basetemp=.consultation-t9-tests`：
+`360 passed, 8 warnings`，其中 PostgreSQL 集成测试 48 项；`DITAN_TEST_POSTGRES_URL` 指向
+本机 Docker 的临时 PostgreSQL 专用测试库，没有使用生产数据库。`ruff check --no-cache .` 通过；`mypy --cache-dir=nul .`：
+`Success: no issues found in 100 source files`。
+
+改动文件（均在 `feature/consultation-backend`）：
+
+```text
+.dockerignore
+.gitignore
+docs/CONSULTATION_M1_HANDOVER.md
+scripts/consultation_export.py
+scripts/consultation_replay.py
+tests/test_consultation_export.py
+tests/test_consultation_replay.py
+```
+
+收尾：已停止并自动移除本次本机 PostgreSQL 容器及其 tmpfs 数据，删除本次新建的 `.venv`、
+`.consultation-t9-tests` 和两版已替代的导出草稿；回放临时 SQLite 已由工具删除。
+本次没有构建临时镜像，保留原有共享 `postgres:17` 镜像、用户 `.env`、预存日志/缓存和最终脱敏交付物。
+复查各仓库状态：avatarhuman、Apkio、Android 无新增改动，HarmonyOS 仅保留原有且哈希未变的
+`build-profile.json5` 修改；DitanBackend 只提交上述七个文件，没有推送、合并或部署。
