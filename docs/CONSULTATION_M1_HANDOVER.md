@@ -348,3 +348,31 @@ per-purpose concurrency: 8
 这次仅验证接口兼容性，不代替真实业务对照或报告质量审阅。T9 继续等待所有者提供脱敏样本。
 参数修正后再次运行同一全量命令：`333 passed, 8 warnings in 49.26s`；Ruff 通过，
 Mypy 仍为 `Success: no issues found in 96 source files`。
+
+## T10 / T11 并行接入状态（2026-10-03）
+
+所有者授权两端不依赖 T9，先按假模型协议完成开发验证。两端均已保留默认 Coze 路径，并完成
+问诊票据、持久化待发轮次、按快照恢复、SSE、显式 report、归档与身份/媒体代际隔离。
+
+| 仓库 | 本地功能提交 | 验证 |
+| --- | --- | --- |
+| MCT_Android | `1fd90a8c79824fff0db36eed301ad9c13bf355cd` | Debug / Release 各 397 项测试通过；test + assembleDebug 通过；四项门禁和硬编码门禁自测通过 |
+| MCT_Harmonyos | `db25950610ac46cc2a34912b476684a1aac8d10f`；播放队列修正 `71876257d84a7ffdae37dfab204f140f43dce27e` | Node 129 项通过；发布脚本 8 项通过；release HAP 构建及签名通过 |
+
+Android 的逐项回归、接口一致性和真机清单见
+[15 号文档的 T10 记录](../../MCT_Android/refect_document/15_重构执行总方案与回归清单.md)。
+HarmonyOS 的逐文件说明、测试与临时签名工具来源见
+[问诊后端接入验收](../../MCT_Harmonyos/docs/问诊后端接入验收.md)。
+
+交叉审查覆盖了本地待发丢失后接续服务端 processing、TURN_ID_CONFLICT 不误采旧结果、
+归档失败只重取 archive、退出同身份重登与普通业务会话续期的区别，以及旧流后续 delta
+不能借媒体重连重新获得播放权限。协议 reset 仅续仍有效的原播放租约；旧 TTS 请求未返回
+也不会阻塞新媒体的派发链。
+
+本轮临时 PostgreSQL 容器/数据库、后端新增虚拟环境和测试目录、Android 专用构建产物、
+HarmonyOS 本次新增测试/编译文件及临时 manifest 工具均已清理；保留本机已有环境与用户文件。
+HarmonyOS 预存 `build-profile.json5` 修改未提交，最终 SHA-256 仍为
+`4BB1BAAAF6977E759DCBDFE415178C3C1D5517ADC3453526CC99B9CC234CDA51`。
+
+源码与部署资料均只在本地 `feature/consultation-backend` 分支提交，没有 push、合并或部署。
+T9 等待脱敏样本；M3 / M4 的真机、实际音视频硬件与完整病历上传验收尚未执行，按两端清单后续验收。
