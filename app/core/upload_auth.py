@@ -58,7 +58,7 @@ class VerificationEnvelope(BaseModel):
     data: VerifiedIdentity
 
 
-def verification_url() -> str:
+def verification_url(path: str = "/client/medical-upload/current") -> str:
     settings = get_settings()
     base = settings.APKIO_BASE_URL.rstrip("/")
     try:
@@ -89,11 +89,21 @@ def verification_url() -> str:
         _ = parsed.port
     except ValueError:
         raise UploadAuthError(503, "UPLOAD_AUTH_UNAVAILABLE") from None
-    return base + "/client/medical-upload/current"
+    return base + path
 
 
 async def verify_upload_token(token: str) -> UploadPrincipal:
-    url = verification_url()
+    return await verify_token(
+        token, path="/client/medical-upload/current",
+        audience="ditan-medical-upload", scope="medical-record:write",
+    )
+
+
+async def verify_token(
+    token: str, *, path: str, audience: str, scope: str
+) -> UploadPrincipal:
+    """Verify a server-selected ticket contract without changing upload behavior."""
+    url = verification_url(path)
     try:
         async with asyncio.timeout(5):
             async with httpx.AsyncClient(
@@ -154,8 +164,8 @@ async def verify_upload_token(token: str) -> UploadPrincipal:
         raise UploadAuthError(503, "UPLOAD_AUTH_PROTOCOL_ERROR") from None
     if (
         not identity.active
-        or identity.audience != "ditan-medical-upload"
-        or "medical-record:write" not in identity.scope
+        or identity.audience != audience
+        or scope not in identity.scope
     ):
         raise UploadAuthError(401, "AUTH_TOKEN_INVALID")
     if expires_at <= datetime.now(timezone.utc):

@@ -8,6 +8,7 @@ from app.core import get_db, get_current_active_doctor, get_structured_logger
 from app.models import Doctor
 from app.core.organization import LEGACY_ORG_ID, OrganizationContext
 from app.core.upload_auth import UploadPrincipal, get_upload_principal
+from app.core.consultation_auth import get_consultation_principal
 
 logger = get_structured_logger(__name__)
 
@@ -21,14 +22,16 @@ class RequestContext:
         db: AsyncSession,
         doctor: Optional[Doctor] = None,
         upload: Optional[UploadPrincipal] = None,
+        consultation: Optional[UploadPrincipal] = None,
     ):
         self.request = request
         self.db = db
         self.doctor = doctor
         self.upload = upload
+        self.consultation = consultation
         self._organization = (
-            upload.organization
-            if upload
+            (upload or consultation).organization
+            if upload or consultation
             else (
                 OrganizationContext(
                     doctor.apkio_org_id
@@ -54,6 +57,12 @@ class RequestContext:
         if self.upload is None:
             raise RuntimeError("This operation requires an upload principal")
         return self.upload
+
+    @property
+    def current_consultation(self) -> UploadPrincipal:
+        if self.consultation is None:
+            raise RuntimeError("This operation requires a consultation principal")
+        return self.consultation
 
     @property
     def current_doctor(self) -> Doctor:
@@ -125,3 +134,11 @@ async def get_upload_context(
     db: AsyncSession = Depends(get_db),
 ) -> RequestContext:
     return RequestContext(request=request, db=db, upload=principal)
+
+
+async def get_consultation_context(
+    request: Request,
+    principal: UploadPrincipal = Depends(get_consultation_principal),
+    db: AsyncSession = Depends(get_db),
+) -> RequestContext:
+    return RequestContext(request=request, db=db, consultation=principal)
