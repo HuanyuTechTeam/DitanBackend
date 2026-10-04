@@ -94,7 +94,7 @@ DATABASE_NAME=ditan_db
 
 AI_API_KEY=your_api_key
 AI_BASE_URL=https://api.deepseek.com
-AI_MODEL_NAME=deepseek-chat
+AI_MODEL_NAME=deepseek-flash
 
 JWT_SECRET_KEY=your-secret-key
 

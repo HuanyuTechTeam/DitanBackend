@@ -8,6 +8,8 @@ from fastapi.responses import JSONResponse
 
 from app.api import api_v1_router
 from app.core.upload_audit import MedicalUploadAuditMiddleware
+from app.core.exceptions import ConsultationError
+from app.core.logging import redacted_exception_info
 from app.core import (
     get_settings,
     init_db,
@@ -36,6 +38,11 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    from app.services.consultation.runner import runner
+    from app.services.consultation.llm import close_llm
+
+    await runner.shutdown(timeout=60)
+    await close_llm()
     logger.info("正在关闭数据库连接...")
     await close_db()
     logger.info("应用已关闭")
@@ -52,6 +59,25 @@ app = FastAPI(
 
 app.add_middleware(MedicalUploadAuditMiddleware)
 app.include_router(api_v1_router)
+
+
+@app.exception_handler(ConsultationError)
+async def consultation_exception_handler(request: Request, exc: ConsultationError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "message": exc.message,
+            "data": exc.data,
+        },
+        headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
+    )
+
+
+def is_consultation_request(request: Request) -> bool:
+    return request.url.path == "/api/v1/consultations" or request.url.path.startswith(
+        "/api/v1/consultations/"
+    )
 
 
 @app.exception_handler(BaseAPIException)
@@ -85,6 +111,15 @@ async def api_exception_handler(request: Request, exc: BaseAPIException):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """处理请求验证异常"""
+    if is_consultation_request(request):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "success": False,
+                "message": "问诊请求参数无效",
+                "data": {"code": "INVALID_REQUEST"},
+            },
+        )
     if hasattr(request.state, "request_id"):
         request.state.upload_failure_code = "UPLOAD_VALIDATION_ERROR"
         return JSONResponse(
@@ -117,6 +152,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """处理未捕获的异常"""
+    if is_consultation_request(request):
+        logger.exception(
+            "Consultation request failed", exc_info=redacted_exception_info(exc)
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "message": "问诊服务处理失败",
+                "data": {"code": "INTERNAL_ERROR"},
+            },
+        )
     if hasattr(request.state, "request_id"):
         request.state.upload_failure_code = "UPLOAD_FAILED"
         return JSONResponse(

@@ -173,7 +173,7 @@ class SanzhenAnalysisResult(Base):
         String(500), nullable=True
     )
     pulse: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    diagnosis_result: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    diagnosis_result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     pre_diagnosis: Mapped["PreDiagnosisRecord"] = relationship(
         "PreDiagnosisRecord", back_populates="sanzhen_result"

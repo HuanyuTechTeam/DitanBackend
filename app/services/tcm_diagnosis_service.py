@@ -31,7 +31,7 @@ class DiagnosisStage:
 class TCMDiagnosisService:
     """中医诊疗服务"""
 
-    def __init__(self, api_key: str, base_url: str, model_name: str = "deepseek-chat"):
+    def __init__(self, api_key: str, base_url: str, model_name: str = "deepseek-flash"):
         self.llm = OpenAIChatCompletion(api_key, base_url, model_name)
         self.model_name = model_name
         logger.info(f"中医诊疗服务初始化: model={model_name}")

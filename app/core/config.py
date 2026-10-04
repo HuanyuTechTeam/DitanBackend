@@ -1,8 +1,9 @@
 """环境配置模块"""
 
 from functools import lru_cache
-from typing import Optional
+from typing import Literal, Optional
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,7 +31,9 @@ class Settings(BaseSettings):
     # AI模型配置
     AI_API_KEY: str
     AI_BASE_URL: str
-    AI_MODEL_NAME: str = "deepseek-chat"
+    AI_MODEL_NAME: str = "deepseek-flash"
+    CONSULTATION_LLM_PROVIDER: Literal["openai", "fake"] = "openai"
+    CONSULTATION_LLM_CONCURRENCY: int = Field(default=8, ge=1)
 
     # JWT认证配置
     JWT_SECRET_KEY: str = "your-secret-key-change-this-in-production"

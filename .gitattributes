@@ -1,0 +1,3 @@
+# Coze prompt text is preserved verbatim, including the trailing space in L18.
+app/services/consultation/prompts/v1/*.txt text eol=lf whitespace=-blank-at-eol
+tests/fixtures/coze_prompts_v1.txt text eol=lf whitespace=-blank-at-eol
