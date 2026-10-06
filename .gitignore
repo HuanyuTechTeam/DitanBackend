@@ -60,7 +60,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-demo/mini-tcm/output
 MCT_Android/
 
 CLAUDE.md
